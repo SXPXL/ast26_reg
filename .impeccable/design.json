@@ -1,0 +1,168 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-26T14:40:00Z",
+  "title": "Design System: Asthra 26",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Aztec Gold",
+        "canonical": "#D4AF37",
+        "tonalRamp": [
+          "#3D3008",
+          "#65510F",
+          "#8E7218",
+          "#B79323",
+          "#D4AF37",
+          "#E3C667",
+          "#F1DD9A",
+          "#FFF4D0"
+        ]
+      },
+      "neutral-bg": {
+        "role": "neutral",
+        "displayName": "Obsidian Deep",
+        "canonical": "#050508",
+        "tonalRamp": [
+          "#020203",
+          "#050508",
+          "#09090E",
+          "#12121B",
+          "#1B1B27",
+          "#262637",
+          "#3B3B52",
+          "#555573"
+        ]
+      },
+      "glass-bg": {
+        "role": "surface",
+        "displayName": "Frosted Obsidian Glass",
+        "canonical": "rgba(18, 18, 27, 0.65)"
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display (Cinzel)",
+        "purpose": "Monumental festival titles and hero greetings."
+      },
+      "body": {
+        "displayName": "Body (Plus Jakarta Sans)",
+        "purpose": "General UI text, event details, and form fields."
+      }
+    },
+    "shadows": [
+      {
+        "name": "glass-rest",
+        "value": "0 8px 24px rgba(0, 0, 0, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.07)",
+        "purpose": "Base resting elevation for floating glass cards."
+      },
+      {
+        "name": "glass-hover",
+        "value": "0 16px 36px rgba(0, 0, 0, 0.6), 0 0 24px rgba(212, 175, 55, 0.18), inset 0 1px 1px rgba(255, 255, 255, 0.15)",
+        "purpose": "Interactive lift and ambient halo for hovered cards."
+      },
+      {
+        "name": "gold-glow",
+        "value": "0 6px 20px rgba(212, 175, 55, 0.35)",
+        "purpose": "Vibrant bloom beneath primary conversion buttons."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-spring",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Smooth, weightless feel for card and button transitions."
+      }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Gold CTA",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Primary action button with metallic gold gradient and bloom.",
+      "html": "<button class=\"ds-btn-gold\">REGISTER NOW</button>",
+      "css": ".ds-btn-gold { background: linear-gradient(135deg, #FFF4D0 0%, #F5D77F 25%, #D4AF37 60%, #9A7B1C 100%); color: #070709; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 0.82rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 14px 28px; border-radius: 14px; border: none; cursor: pointer; box-shadow: 0 6px 20px rgba(212, 175, 55, 0.35); transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease; outline: none; } .ds-btn-gold:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(245, 215, 127, 0.5); }"
+    },
+    {
+      "name": "Glass Action Button",
+      "kind": "button",
+      "refersTo": "button-glass",
+      "description": "Translucent glass button with subtle gold border illumination.",
+      "html": "<button class=\"ds-btn-glass\">EXPLORE RULES</button>",
+      "css": ".ds-btn-glass { background: rgba(18, 18, 27, 0.65); backdrop-filter: blur(12px); color: #FAF9F6; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 0.82rem; font-weight: 600; letter-spacing: 0.05em; padding: 12px 24px; border-radius: 14px; border: 1px solid rgba(212, 175, 55, 0.25); cursor: pointer; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.08); transition: all 0.2s ease; outline: none; } .ds-btn-glass:hover { border-color: #F5D77F; color: #F5D77F; box-shadow: 0 6px 20px rgba(212, 175, 55, 0.2); transform: translateY(-1px); }"
+    },
+    {
+      "name": "Glass Event Card",
+      "kind": "card",
+      "refersTo": "card-glass",
+      "description": "Crystalline glass card with top specular light and smooth hover lift.",
+      "html": "<div class=\"ds-card-glass\"><div class=\"ds-card-title\">HACKATHON '26</div><p class=\"ds-card-meta\">10:00 AM • Nov 14, 2026</p><div class=\"ds-card-fee\">₹ 300</div></div>",
+      "css": ".ds-card-glass { background: rgba(18, 18, 27, 0.65); backdrop-filter: blur(16px); border-radius: 20px; border: 1px solid rgba(212, 175, 55, 0.18); padding: 28px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.08); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s ease, box-shadow 0.3s ease; cursor: pointer; } .ds-card-glass:hover { transform: translateY(-4px); border-color: rgba(245, 215, 127, 0.45); box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6), 0 0 24px rgba(212, 175, 55, 0.18); } .ds-card-title { font-family: 'Cinzel', serif; font-size: 1.35rem; font-weight: 700; color: #F5D77F; margin-bottom: 8px; } .ds-card-meta { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 0.85rem; color: #A7A296; margin-bottom: 16px; } .ds-card-fee { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 1.25rem; font-weight: 700; color: #FAF9F6; }"
+    },
+    {
+      "name": "Glass Input Field",
+      "kind": "input",
+      "refersTo": "input-glass",
+      "description": "Recessed frosted glass input with gold highlight on focus.",
+      "html": "<input type=\"text\" class=\"ds-input-glass\" placeholder=\"Search participant or code...\" />",
+      "css": ".ds-input-glass { width: 100%; box-sizing: border-box; background: rgba(10, 10, 16, 0.65); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 14px 18px; color: #FAF9F6; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 0.9rem; outline: none; transition: border-color 0.25s ease, box-shadow 0.25s ease; } .ds-input-glass:focus { border-color: rgba(212, 175, 55, 0.55); box-shadow: 0 0 14px rgba(212, 175, 55, 0.22); } .ds-input-glass::placeholder { color: #6B675E; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Celestial Obsidian Prism",
+    "overview": "Asthra 26 embodies a luxury minimalist glassmorphic aesthetic set against an infinite obsidian expanse. Rather than utilizing heavy opaque cards or extruded clay neumorphism with dual opposing drop shadows, every card, modal, and interactive container functions as a crystalline, semi-translucent glass prism suspended over velvet darkness. Surfaces breathe through a combination of optical backdrop blur (16px to 24px), ultra-fine metallic gold borders (1px solid rgba(212, 175, 55, 0.18)), and subtle top-edge specular illumination.",
+    "keyCharacteristics": [
+      "Translucent Glass Architecture: Semi-transparent frosted obsidian surfaces (rgba(18, 18, 27, 0.65)) with hardware-accelerated blur.",
+      "Micro-Gold Accents: Hairline borders and specular edge reflections in warm champagne and Aztec gold.",
+      "Typography Distinction: The dramatic Roman serif grandeur of Cinzel paired with the clean, utilitarian geometry of Plus Jakarta Sans.",
+      "Atmospheric Depth: Diffuse, soft ambient halos and glows replacing heavy drop shadows."
+    ],
+    "rules": [
+      {
+        "name": "The Golden Rarity Rule",
+        "body": "Metallic gold gradient fills appear on at most one primary CTA button per view or modal. Auxiliary actions must remain glass-tinted with gold borders to preserve the value of the primary action.",
+        "section": "colors"
+      },
+      {
+        "name": "The Translucency Depth Rule",
+        "body": "Never use solid #12121b or fully opaque backgrounds for cards or popovers. Surfaces must use alpha transparency (rgba(18, 18, 27, 0.65)) with backdrop-filter: blur(16px) to allow underlying illumination and gradients to bleed through organically.",
+        "section": "colors"
+      },
+      {
+        "name": "The Regal Display Rule",
+        "body": "All Cinzel titles (.font-display) must be styled with letter-spacing of at least 0.03em and paired with gold clipping or glowing ambient drop-shadow.",
+        "section": "typography"
+      },
+      {
+        "name": "The No-Clay Rule",
+        "body": "Never apply heavy dual light/dark embossing or bevels. Surfaces must look like optical smoked glass, not carved clay.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Specular Edge Rule",
+        "body": "Every glass container must feature a hairline top specular highlight (inset 0 1px 1px rgba(255, 255, 255, 0.08)) simulating light hitting a polished chamfered bevel.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do use backdrop-filter: blur(16px) on all floating cards, modals, and tooltips.",
+      "Do combine rgba(18, 18, 27, 0.65) with an inner specular highlight (inset 0 1px 1px rgba(255, 255, 255, 0.08)).",
+      "Do use the official title Asthra 26 and preserve Cinzel for display moments.",
+      "Do reserve the solid gold gradient button for the single primary conversion action per screen.",
+      "Do maintain isolated routes: clean event gallery on /, gatekeeping desk on /volunteer."
+    ],
+    "donts": [
+      "Don't use opaque solid black or gray backgrounds (#12121b, #222) for cards that block backdrop translucency.",
+      "Don't use dual-axis clay neumorphic embossing shadows (8px 8px 18px ... -8px -8px 18px).",
+      "Don't use loud neon or generic saturated colors (plain #0000FF or #00FF00); stick to tailored gold, emerald green, and crimson.",
+      "Don't clutter the participant landing page with volunteer or administrative controls."
+    ]
+  }
+}

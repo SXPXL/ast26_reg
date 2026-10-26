@@ -1,0 +1,456 @@
+/* ==========================================================================
+   ASTHRA 26 — MINIMALIST GLASSMORPHIC LUXURY DESIGN SYSTEM
+   Theme: Celestial Obsidian Prism (Dark Velvet · Translucent Glass · Aztec Gold)
+   ========================================================================== */
+
+:root {
+  /* Asthra Color Palette */
+  --bg-deep: #050508;
+  --bg-primary: #09090e;
+  --bg-surface: #0e0e14;
+  --bg-card: rgba(18, 18, 27, 0.65);
+  --bg-card-hover: rgba(24, 24, 36, 0.78);
+  --bg-inset: rgba(10, 10, 16, 0.65);
+
+  /* Gold Metallic Accents */
+  --gold-primary: #D4AF37;
+  --gold-bright: #F5D77F;
+  --gold-light: #FFF4D0;
+  --gold-dark: #9A7B1C;
+  --gold-glow: rgba(212, 175, 55, 0.28);
+  --gold-glow-strong: rgba(245, 215, 127, 0.5);
+  --gold-gradient: linear-gradient(135deg, #FFF4D0 0%, #F5D77F 25%, #D4AF37 60%, #9A7B1C 100%);
+  --gold-border: rgba(212, 175, 55, 0.18);
+  --gold-border-hover: rgba(245, 215, 127, 0.45);
+
+  /* Minimalist Glass Tokens */
+  --glass-bg: rgba(18, 18, 27, 0.65);
+  --glass-bg-hover: rgba(24, 24, 36, 0.78);
+  --glass-inset: rgba(10, 10, 16, 0.65);
+  --glass-border: rgba(212, 175, 55, 0.18);
+  --glass-border-hover: rgba(245, 215, 127, 0.45);
+  --glass-blur: blur(16px);
+  --glass-blur-lg: blur(24px);
+
+  /* Glassmorphic Optical Elevation (replaces heavy clay neumorphism) */
+  --glass-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.08);
+  --glass-shadow-hover: 0 16px 36px rgba(0, 0, 0, 0.65), 0 0 24px rgba(212, 175, 55, 0.18), inset 0 1px 1px rgba(255, 255, 255, 0.15);
+  --glass-shadow-inset: inset 0 2px 6px rgba(0, 0, 0, 0.55), inset 0 1px 2px rgba(0, 0, 0, 0.35);
+
+  /* Legacy aliases mapped cleanly to glassmorphism */
+  --neu-shadow-raised: var(--glass-shadow);
+  --neu-shadow-raised-hover: var(--glass-shadow-hover);
+  --neu-shadow-flat: var(--glass-shadow);
+  --neu-shadow-small: 0 4px 12px rgba(0, 0, 0, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.06);
+  --neu-shadow-inset: var(--glass-shadow-inset);
+  --neu-shadow-inset-deep: inset 0 3px 8px rgba(0, 0, 0, 0.7);
+  --neu-gold-glow: 0 0 20px rgba(212, 175, 55, 0.25);
+
+  /* Functional Status Accents */
+  --accent-red: #EF4444;
+  --accent-green: #10B981;
+  --accent-blue: #3B82F6;
+
+  /* Typography Colors */
+  --text-white: #FAF9F6;
+  --text-offwhite: #E7E4DC;
+  --text-secondary: #A7A296;
+  --text-muted: #6B675E;
+
+  /* Typography Families */
+  --font-serif-display: 'Cinzel', Georgia, serif;
+  --font-serif-body: 'Playfair Display', Georgia, serif;
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'Space Grotesk', monospace;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+  color-scheme: dark;
+  background-color: var(--bg-deep);
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--text-offwhite);
+  background-color: var(--bg-deep);
+  background-image: 
+    radial-gradient(circle at 15% 10%, rgba(212, 175, 55, 0.04) 0%, transparent 40%),
+    radial-gradient(circle at 85% 85%, rgba(59, 130, 246, 0.03) 0%, transparent 45%);
+  background-attachment: fixed;
+  min-height: 100vh;
+  overflow-x: hidden;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-deep);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(212, 175, 55, 0.22);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(212, 175, 55, 0.55);
+}
+
+::selection {
+  background: rgba(212, 175, 55, 0.3);
+  color: #FFFFFF;
+}
+
+/* Typography Helpers */
+.font-display { font-family: var(--font-serif-display); }
+.font-body { font-family: var(--font-serif-body); }
+.font-sans { font-family: var(--font-sans); }
+.font-mono { font-family: var(--font-mono); }
+
+.gold-text {
+  background: var(--gold-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  display: inline-block;
+}
+
+.gold-text-glow {
+  background: var(--gold-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 14px rgba(245, 215, 127, 0.35));
+  display: inline-block;
+}
+
+/* ==========================================================================
+   MINIMALIST GLASSMORPHIC UTILITIES & CARDS
+   ========================================================================== */
+
+/* Glass Card */
+.glass-card,
+.neu-card {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-shadow);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-card-hover:hover,
+.neu-card-hover:hover {
+  background: var(--glass-bg-hover);
+  box-shadow: var(--glass-shadow-hover);
+  border-color: var(--glass-border-hover);
+  transform: translateY(-4px);
+}
+
+/* Flat Glass Surface */
+.glass-flat,
+.neu-flat {
+  background: rgba(14, 14, 22, 0.6);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: var(--glass-shadow);
+  border-radius: 14px;
+}
+
+/* Recessed Inset Glass Surface */
+.glass-inset,
+.neu-inset {
+  background: var(--glass-inset);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: var(--glass-shadow-inset);
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* ==========================================================================
+   GLASSMORPHIC BUTTONS
+   ========================================================================== */
+
+/* Glass Interactive Secondary Button */
+.glass-btn,
+.neu-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 0.75rem 1.4rem;
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--text-offwhite);
+  background: rgba(18, 18, 27, 0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  outline: none;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+}
+
+.glass-btn:hover,
+.neu-btn:hover {
+  color: var(--gold-bright);
+  background: rgba(26, 26, 38, 0.75);
+  border-color: var(--gold-border-hover);
+  box-shadow: 0 6px 20px rgba(212, 175, 55, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.15);
+  transform: translateY(-2px);
+}
+
+.glass-btn:active,
+.neu-btn:active {
+  box-shadow: var(--glass-shadow-inset);
+  transform: translateY(1px);
+}
+
+.glass-btn.active,
+.neu-btn.active {
+  background: var(--glass-inset);
+  box-shadow: var(--glass-shadow-inset);
+  color: var(--gold-bright);
+  border-color: rgba(212, 175, 55, 0.45);
+}
+
+/* Glassmorphic Gold Primary CTA Button */
+.glass-btn-gold,
+.neu-btn-gold {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 0.85rem 1.8rem;
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #070709;
+  background: var(--gold-gradient);
+  border: none;
+  border-radius: 14px;
+  box-shadow: 0 6px 22px rgba(212, 175, 55, 0.38), inset 0 1px 1px rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  outline: none;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+}
+
+.glass-btn-gold:hover,
+.neu-btn-gold:hover {
+  box-shadow: 0 10px 30px rgba(245, 215, 127, 0.55), inset 0 1px 1px rgba(255, 255, 255, 0.5);
+  transform: translateY(-2px) scale(1.01);
+}
+
+.glass-btn-gold:active,
+.neu-btn-gold:active {
+  transform: translateY(1px) scale(0.99);
+  box-shadow: 0 3px 12px rgba(212, 175, 55, 0.3);
+}
+
+.glass-btn-gold:disabled,
+.neu-btn-gold:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+/* ==========================================================================
+   GLASSMORPHIC RECESSED INPUTS
+   ========================================================================== */
+
+.glass-input,
+.neu-input {
+  width: 100%;
+  padding: 0.85rem 1.15rem;
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  color: var(--text-white);
+  background: var(--glass-inset);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  box-shadow: var(--glass-shadow-inset);
+  outline: none;
+  transition: all 0.25s ease;
+}
+
+.glass-input:focus,
+.neu-input:focus {
+  border-color: rgba(212, 175, 55, 0.55);
+  box-shadow: var(--glass-shadow-inset), 0 0 14px rgba(212, 175, 55, 0.22);
+}
+
+.glass-input::placeholder,
+.neu-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* ==========================================================================
+   GLASSMORPHIC BADGES
+   ========================================================================== */
+
+.glass-badge,
+.neu-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  border-radius: 9999px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.08);
+}
+
+.glass-badge-gold,
+.neu-badge-gold {
+  background: rgba(212, 175, 55, 0.12);
+  color: var(--gold-bright);
+  border: 1px solid rgba(212, 175, 55, 0.35);
+}
+
+.glass-badge-green,
+.neu-badge-green {
+  background: rgba(16, 185, 129, 0.12);
+  color: #34D399;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.glass-badge-red,
+.neu-badge-red {
+  background: rgba(239, 68, 68, 0.12);
+  color: #F87171;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+/* Digital E-Pass Card */
+.digital-ticket-pass {
+  background: rgba(18, 18, 27, 0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.75), 0 0 28px rgba(212, 175, 55, 0.18), inset 0 1px 1px rgba(255, 255, 255, 0.12);
+  border-radius: 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+.digital-ticket-pass::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--gold-gradient);
+}
+
+/* Modal Overlay */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 3, 5, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+  animation: fadeIn 0.25s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Shimmer / Pulse animation */
+@keyframes shimmer {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite ease-in-out;
+}
+
+/* Asthra Splash Screen Loader Animations */
+@keyframes splashFadeIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes splashTextSweep {
+  0% {
+    background-position: 180% 0;
+  }
+  100% {
+    background-position: -80% 0;
+  }
+}
+
+@keyframes splashAuraPulse {
+  0%, 100% {
+    opacity: 0.2;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(1.15);
+  }
+}
+
+.splash-content {
+  animation: splashFadeIn 1.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Shine beam strictly confined to the text characters */
+.splash-text-sweep {
+  background: linear-gradient(
+    110deg,
+    #D4AF37 0%,
+    #D4AF37 36%,
+    #FFF4D0 46%,
+    #FFFFFF 50%,
+    #FFF4D0 54%,
+    #D4AF37 64%,
+    #9A7B1C 100%
+  );
+  background-size: 260% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  display: inline-block;
+  animation: splashTextSweep 2.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.6s forwards;
+  filter: drop-shadow(0 0 16px rgba(245, 215, 127, 0.35));
+}
