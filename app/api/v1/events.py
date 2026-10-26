@@ -139,6 +139,8 @@ async def create_event(
         registration_deadline=event_in.registration_deadline,
         event_date=event_in.event_date,
         venue=event_in.venue,
+        start_time=event_in.start_time,
+        end_time=event_in.end_time,
         rules=event_in.rules,
         image_url=event_in.image_url,
         is_active=event_in.is_active,

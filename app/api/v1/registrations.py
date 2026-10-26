@@ -98,11 +98,12 @@ async def create_registration(
     # 3. Create Registration Record
     registration_code = await get_unique_registration_code(db)
     total_amount = event.registration_fee
+    is_offline = (reg_in.payment_mode or "").upper() == "OFFLINE"
 
-    # If event is free, immediately mark as SUCCESS
+    # If event is free or paid offline cash, immediately mark as SUCCESS
     initial_payment_status = (
         PaymentStatus.SUCCESS.value
-        if total_amount <= Decimal("0.00")
+        if (total_amount <= Decimal("0.00") or is_offline)
         else PaymentStatus.PENDING.value
     )
 
@@ -113,10 +114,12 @@ async def create_registration(
         primary_email=reg_in.primary_email.lower(),
         primary_phone=reg_in.primary_phone,
         college_name=reg_in.college_name,
-        department=reg_in.department,
-        year_of_study=reg_in.year_of_study,
+        department=reg_in.department or "General",
+        year_of_study=reg_in.year_of_study or "1st Year",
+        course_and_semester=reg_in.course_and_semester,
         team_name=reg_in.team_name.strip() if reg_in.team_name else None,
         total_amount=total_amount,
+        payment_mode="OFFLINE" if is_offline else "ONLINE",
         payment_status=initial_payment_status,
         attendance_status=AttendanceStatus.NOT_ATTENDED.value,
     )
@@ -131,13 +134,14 @@ async def create_registration(
             email=member.email.lower(),
             phone=member.phone,
             college_name=member.college_name,
+            course_and_semester=member.course_and_semester,
             roll_no=member.roll_no,
         )
         db.add(tm)
 
-    # 5. Initialize Cashfree Payment Order if fee > 0
+    # 5. Initialize Cashfree Payment Order if online and fee > 0
     payment_session_data = None
-    if total_amount > Decimal("0.00"):
+    if total_amount > Decimal("0.00") and not is_offline:
         cf_order_id = f"CF_{registration.registration_code.replace('-', '_')}_{int(datetime.now().timestamp())}"
         try:
             cf_response = await cashfree_service.create_order(
@@ -175,6 +179,7 @@ async def create_registration(
         registration_id=str(registration.id),
         total_amount=registration.total_amount,
         payment_status=PaymentStatus(registration.payment_status),
+        payment_mode=registration.payment_mode,
         payment_session=payment_session_data,
     )
 
@@ -214,6 +219,7 @@ async def list_registrations(
     event_id: Optional[str] = None,
     payment_status: Optional[PaymentStatus] = None,
     attendance_status: Optional[AttendanceStatus] = None,
+    payment_mode: Optional[str] = None,
     search: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_volunteer_or_admin),
@@ -241,6 +247,8 @@ async def list_registrations(
         query = query.where(Registration.event_id == event_id)
     if payment_status:
         query = query.where(Registration.payment_status == payment_status.value)
+    if payment_mode:
+        query = query.where(Registration.payment_mode == payment_mode.upper())
     if attendance_status:
         query = query.where(Registration.attendance_status == attendance_status.value)
     if search:

@@ -13,6 +13,8 @@ class EventStatItem(BaseModel):
     total_attended_count: int
     attendance_rate: float
     total_revenue: Decimal
+    online_revenue: Decimal = Decimal("0.00")
+    offline_revenue: Decimal = Decimal("0.00")
 
 
 class OverallStatsResponse(BaseModel):
@@ -22,5 +24,9 @@ class OverallStatsResponse(BaseModel):
     total_participants: int
     total_checked_in: int
     total_revenue: Decimal
+    online_revenue: Decimal = Decimal("0.00")
+    offline_revenue: Decimal = Decimal("0.00")
+    online_registrations_count: int = 0
+    offline_registrations_count: int = 0
     recent_registrations_count: int
     event_stats: List[EventStatItem]

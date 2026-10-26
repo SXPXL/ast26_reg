@@ -42,6 +42,8 @@ class Event(Base):
     registration_deadline = Column(DateTime(timezone=True), nullable=False)
     event_date = Column(DateTime(timezone=True), nullable=False)
     venue = Column(String(255), nullable=False)
+    start_time = Column(String(50), nullable=True)
+    end_time = Column(String(50), nullable=True)
     rules = Column(Text, nullable=True)
     image_url = Column(String(1000), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)

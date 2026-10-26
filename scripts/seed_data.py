@@ -27,32 +27,40 @@ async def seed():
         try:
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(100);"))
             await conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_username ON users (username);"))
-            await conn.execute(text("UPDATE users SET username = split_part(email, '@', 1) WHERE username IS NULL;"))
+            await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS start_time VARCHAR(50);"))
+            await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS end_time VARCHAR(50);"))
+            await conn.execute(text("ALTER TABLE registrations ADD COLUMN IF NOT EXISTS payment_mode VARCHAR(30) DEFAULT 'ONLINE';"))
+            await conn.execute(text("ALTER TABLE registrations ADD COLUMN IF NOT EXISTS course_and_semester VARCHAR(100);"))
+            await conn.execute(text("ALTER TABLE team_members ADD COLUMN IF NOT EXISTS course_and_semester VARCHAR(100);"))
         except Exception as e:
             print(f"Notice during column verification: {e}")
 
     async with AsyncSessionLocal() as db:
-        # 1. Create Default Admin
+        # 1. Create/Update Default Admin
         admin_email = "admin@fest.com"
-        admin_res = await db.execute(select(User).where(User.email == admin_email))
+        admin_res = await db.execute(select(User).where(User.username == "admin"))
         admin = admin_res.scalars().first()
+        if not admin:
+            admin_res = await db.execute(select(User).where(User.email == admin_email))
+            admin = admin_res.scalars().first()
 
+        hashed_admin_pwd = get_password_hash("1234")
         if not admin:
             admin = User(
                 email=admin_email,
                 username="admin",
-                hashed_password=get_password_hash("Admin@12345"),
+                hashed_password=hashed_admin_pwd,
                 full_name="Fest Main Admin",
                 phone="9876543200",
                 role=UserRole.ADMIN.value,
                 is_active=True,
             )
             db.add(admin)
-            print(f"Created Admin: username='admin', {admin_email} / Admin@12345")
+            print("Created Admin: username='admin', password='1234'")
         else:
-            if not admin.username:
-                admin.username = "admin"
-            print(f"Admin {admin_email} (username: {admin.username}) ready.")
+            admin.username = "admin"
+            admin.hashed_password = hashed_admin_pwd
+            print("Updated Admin: username='admin', password='1234'")
 
         # 2. Create Default Volunteer
         vol_email = "volunteer@fest.com"

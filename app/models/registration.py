@@ -44,12 +44,14 @@ class Registration(Base):
     college_name = Column(String(255), nullable=False)
     department = Column(String(255), nullable=False)
     year_of_study = Column(String(50), nullable=False)
+    course_and_semester = Column(String(100), nullable=True)
 
     # Team Info (if applicable)
     team_name = Column(String(255), nullable=True)
 
     # Financial and Status
     total_amount = Column(Numeric(10, 2), default=0.00, nullable=False)
+    payment_mode = Column(String(30), default="ONLINE", nullable=False)
     payment_status = Column(String(30), default=PaymentStatus.PENDING.value, nullable=False, index=True)
     attendance_status = Column(String(30), default=AttendanceStatus.NOT_ATTENDED.value, nullable=False, index=True)
 

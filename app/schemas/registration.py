@@ -10,6 +10,7 @@ class TeamMemberCreate(BaseModel):
     email: EmailStr
     phone: str
     college_name: str
+    course_and_semester: Optional[str] = None
     roll_no: Optional[str] = None
 
 
@@ -19,6 +20,7 @@ class TeamMemberResponse(BaseModel):
     email: str
     phone: str
     college_name: str
+    course_and_semester: Optional[str] = None
     roll_no: Optional[str] = None
     created_at: datetime
 
@@ -32,9 +34,11 @@ class RegistrationCreate(BaseModel):
     primary_email: EmailStr
     primary_phone: str = Field(..., max_length=30)
     college_name: str = Field(..., max_length=255)
-    department: str = Field(..., max_length=255)
-    year_of_study: str = Field(..., max_length=50)
+    department: Optional[str] = "General"
+    year_of_study: Optional[str] = "1st Year"
+    course_and_semester: Optional[str] = None
     team_name: Optional[str] = None
+    payment_mode: Optional[str] = "ONLINE"
     team_members: List[TeamMemberCreate] = []
 
 
@@ -49,7 +53,9 @@ class RegistrationSummary(BaseModel):
     college_name: str
     department: str
     year_of_study: str
+    course_and_semester: Optional[str] = None
     team_name: Optional[str] = None
+    payment_mode: Optional[str] = "ONLINE"
     total_amount: Decimal
     payment_status: PaymentStatus
     attendance_status: AttendanceStatus
@@ -74,4 +80,5 @@ class RegistrationCreatedResponse(BaseModel):
     registration_id: str
     total_amount: Decimal
     payment_status: PaymentStatus
+    payment_mode: Optional[str] = "ONLINE"
     payment_session: Optional[dict] = None

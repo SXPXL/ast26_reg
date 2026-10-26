@@ -52,10 +52,13 @@ def _get_engine_config():
     return url, connect_args
 
 
+from sqlalchemy.pool import NullPool
+
 _url, _connect_args = _get_engine_config()
 
 engine = create_async_engine(
     _url,
+    poolclass=NullPool,
     echo=settings.DEBUG,
     future=True,
     connect_args=_connect_args,

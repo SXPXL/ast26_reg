@@ -92,9 +92,10 @@ export default function DigitalTicketPass({ registration, onClose }) {
             </div>
 
             <div>
-              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Institution & Dept</span>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Institution & Course</span>
               <div style={{ fontSize: '0.85rem', color: 'var(--text-offwhite)' }}>
-                {registration.college_name} ({registration.department}, {registration.year_of_study})
+                {registration.college_name}
+                {registration.course_and_semester ? ` • ${registration.course_and_semester}` : (registration.department ? ` • ${registration.department}` : '')}
               </div>
             </div>
 

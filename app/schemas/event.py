@@ -17,6 +17,8 @@ class EventBase(BaseModel):
     registration_deadline: datetime
     event_date: datetime
     venue: str = Field(..., max_length=255)
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
     rules: Optional[str] = None
     image_url: Optional[str] = None
     is_active: bool = True
@@ -51,6 +53,8 @@ class EventUpdate(BaseModel):
     registration_deadline: Optional[datetime] = None
     event_date: Optional[datetime] = None
     venue: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
     rules: Optional[str] = None
     image_url: Optional[str] = None
     is_active: Optional[bool] = None

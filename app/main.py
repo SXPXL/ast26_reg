@@ -12,7 +12,9 @@ if sys.platform == "win32":
 
 from app.api.router import api_router
 from app.core.config import settings
-from app.db.session import Base, engine
+from app.core.security import get_password_hash
+from app.db.session import AsyncSessionLocal, Base, engine
+from app.models.user import User, UserRole
 
 logging.basicConfig(
     level=logging.INFO if not settings.DEBUG else logging.DEBUG,
@@ -29,14 +31,51 @@ async def lifespan(app: FastAPI):
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-            # Ensure the username column exists on existing users table
+            # Ensure columns exist on database tables
             try:
                 await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(100);"))
                 await conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_username ON users (username);"))
                 await conn.execute(text("UPDATE users SET username = split_part(email, '@', 1) WHERE username IS NULL;"))
+
+                await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS start_time VARCHAR(50);"))
+                await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS end_time VARCHAR(50);"))
+                await conn.execute(text("ALTER TABLE registrations ADD COLUMN IF NOT EXISTS payment_mode VARCHAR(30) DEFAULT 'ONLINE';"))
+                await conn.execute(text("ALTER TABLE registrations ADD COLUMN IF NOT EXISTS course_and_semester VARCHAR(100);"))
+                await conn.execute(text("ALTER TABLE team_members ADD COLUMN IF NOT EXISTS course_and_semester VARCHAR(100);"))
             except Exception as col_err:
                 logger.info(f"Column check notice: {col_err}")
-        logger.info("Database tables and columns verified successfully.")
+
+        # Ensure admin user exists with username "admin" and password "1234"
+        async with AsyncSessionLocal() as db:
+            from sqlalchemy import select
+            admin_res = await db.execute(select(User).where(User.username == "admin"))
+            admin = admin_res.scalars().first()
+            if not admin:
+                admin_res = await db.execute(select(User).where(User.email == "admin@fest.com"))
+                admin = admin_res.scalars().first()
+
+            hashed_pwd = get_password_hash("1234")
+            if not admin:
+                admin = User(
+                    email="admin@fest.com",
+                    username="admin",
+                    hashed_password=hashed_pwd,
+                    full_name="Fest Main Admin",
+                    phone="9876543200",
+                    role=UserRole.ADMIN.value,
+                    is_active=True,
+                )
+                db.add(admin)
+                await db.commit()
+                logger.info("Default Admin seeded: username='admin', password='1234'")
+            else:
+                admin.username = "admin"
+                admin.hashed_password = hashed_pwd
+                admin.role = UserRole.ADMIN.value
+                await db.commit()
+                logger.info("Admin updated: username='admin', password='1234'")
+
+        logger.info("Database tables, columns, and admin seeded successfully.")
     except Exception as e:
         logger.warning(
             f"Database auto-creation warning (ensure PostgreSQL is running or run migrations): {e}"

@@ -44,13 +44,45 @@ async def get_overview_statistics(
     )
     total_confirmed = confirmed_regs_res.scalar() or 0
 
-    # 4. Total revenue
+    # 4. Total revenue & online vs offline breakdown
     rev_res = await db.execute(
         select(func.sum(Registration.total_amount)).where(
             Registration.payment_status == PaymentStatus.SUCCESS.value
         )
     )
     total_revenue = rev_res.scalar() or Decimal("0.00")
+
+    on_rev_res = await db.execute(
+        select(func.sum(Registration.total_amount)).where(
+            Registration.payment_status == PaymentStatus.SUCCESS.value,
+            Registration.payment_mode == "ONLINE",
+        )
+    )
+    online_revenue = on_rev_res.scalar() or Decimal("0.00")
+
+    off_rev_res = await db.execute(
+        select(func.sum(Registration.total_amount)).where(
+            Registration.payment_status == PaymentStatus.SUCCESS.value,
+            Registration.payment_mode == "OFFLINE",
+        )
+    )
+    offline_revenue = off_rev_res.scalar() or Decimal("0.00")
+
+    on_cnt_res = await db.execute(
+        select(func.count(Registration.id)).where(
+            Registration.payment_status == PaymentStatus.SUCCESS.value,
+            Registration.payment_mode == "ONLINE",
+        )
+    )
+    online_registrations_count = on_cnt_res.scalar() or 0
+
+    off_cnt_res = await db.execute(
+        select(func.count(Registration.id)).where(
+            Registration.payment_status == PaymentStatus.SUCCESS.value,
+            Registration.payment_mode == "OFFLINE",
+        )
+    )
+    offline_registrations_count = off_cnt_res.scalar() or 0
 
     # 5. Total Checked in
     checked_in_res = await db.execute(
@@ -105,6 +137,25 @@ async def get_overview_statistics(
         )
         ev_rev = ev_rev_res.scalar() or Decimal("0.00")
 
+        # Online vs Offline revenue for this event
+        ev_on_rev_res = await db.execute(
+            select(func.sum(Registration.total_amount)).where(
+                Registration.event_id == ev.id,
+                Registration.payment_status == PaymentStatus.SUCCESS.value,
+                Registration.payment_mode == "ONLINE",
+            )
+        )
+        ev_on_rev = ev_on_rev_res.scalar() or Decimal("0.00")
+
+        ev_off_rev_res = await db.execute(
+            select(func.sum(Registration.total_amount)).where(
+                Registration.event_id == ev.id,
+                Registration.payment_status == PaymentStatus.SUCCESS.value,
+                Registration.payment_mode == "OFFLINE",
+            )
+        )
+        ev_off_rev = ev_off_rev_res.scalar() or Decimal("0.00")
+
         # Total individual participant count
         ev_tm_res = await db.execute(
             select(func.count(TeamMember.id))
@@ -130,6 +181,8 @@ async def get_overview_statistics(
                 total_attended_count=ev_att,
                 attendance_rate=round(attendance_rate, 2),
                 total_revenue=ev_rev,
+                online_revenue=ev_on_rev,
+                offline_revenue=ev_off_rev,
             )
         )
 
@@ -140,6 +193,10 @@ async def get_overview_statistics(
         total_participants=total_participants,
         total_checked_in=total_checked_in,
         total_revenue=total_revenue,
+        online_revenue=online_revenue,
+        offline_revenue=offline_revenue,
+        online_registrations_count=online_registrations_count,
+        offline_registrations_count=offline_registrations_count,
         recent_registrations_count=total_confirmed,
         event_stats=event_stats_list,
     )

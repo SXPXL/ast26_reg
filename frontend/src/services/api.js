@@ -123,6 +123,7 @@ export const api = {
     const query = new URLSearchParams();
     if (params.event_id) query.append('event_id', params.event_id);
     if (params.payment_status) query.append('payment_status', params.payment_status);
+    if (params.payment_mode) query.append('payment_mode', params.payment_mode);
     if (params.attendance_status) query.append('attendance_status', params.attendance_status);
     if (params.search) query.append('search', params.search);
     const qs = query.toString() ? `?${query.toString()}` : '';

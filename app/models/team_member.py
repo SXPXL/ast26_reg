@@ -23,6 +23,7 @@ class TeamMember(Base):
     email = Column(String(255), nullable=False)
     phone = Column(String(30), nullable=False)
     college_name = Column(String(255), nullable=False)
+    course_and_semester = Column(String(100), nullable=True)
     roll_no = Column(String(100), nullable=True)
 
     created_at = Column(
