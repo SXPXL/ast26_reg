@@ -42,6 +42,7 @@ async def lifespan(app: FastAPI):
                 await conn.execute(text("ALTER TABLE registrations ADD COLUMN IF NOT EXISTS payment_mode VARCHAR(30) DEFAULT 'ONLINE';"))
                 await conn.execute(text("ALTER TABLE registrations ADD COLUMN IF NOT EXISTS course_and_semester VARCHAR(100);"))
                 await conn.execute(text("ALTER TABLE team_members ADD COLUMN IF NOT EXISTS course_and_semester VARCHAR(100);"))
+                await conn.execute(text("ALTER TABLE team_members ADD COLUMN IF NOT EXISTS department VARCHAR(100);"))
             except Exception as col_err:
                 logger.info(f"Column check notice: {col_err}")
 

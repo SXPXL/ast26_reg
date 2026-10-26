@@ -2,15 +2,13 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { api } from '../services/api';
 import EventCard from '../components/EventCard';
 import EventModal from '../components/EventModal';
-import LookupTicketModal from '../components/LookupTicketModal';
 import SplashLoader from '../components/SplashLoader';
-import { Search, Sparkles, Ticket, Users, Layers, Filter } from 'lucide-react';
+import { Search, Sparkles, Users, Layers, Filter } from 'lucide-react';
 
 export default function ParticipantPage() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedEvent, setSelectedEvent] = useState(null);
-  const [lookupOpen, setLookupOpen] = useState(false);
 
   // Filters & search
   const [searchQuery, setSearchQuery] = useState('');
@@ -117,69 +115,23 @@ export default function ParticipantPage() {
       {/* Asthra 26 Initial Splash Loader */}
       {showSplash && <SplashLoader isFadingOut={isFadingOut} />}
 
-      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '3.5rem 2rem 6rem' }}>
-        {/* Top Hero Section */}
-        <div style={{ marginBottom: '3.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '2rem' }}>
-          <div>
-            <div
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                fontSize: '0.72rem',
-                fontWeight: '700',
-                letterSpacing: '0.2em',
-                textTransform: 'uppercase',
-                color: 'var(--gold-bright)',
-                marginBottom: '0.75rem',
-              }}
-            >
-              <Sparkles size={14} color="#D4AF37" />
-              <span>Asthra 26 • Official Registration Portal</span>
-            </div>
-
-            <h1
-              className="font-display gold-text-glow"
-              style={{
-                fontSize: 'clamp(2.8rem, 6vw, 4.5rem)',
-                fontWeight: '800',
-                letterSpacing: '0.04em',
-                lineHeight: 1.15,
-                marginBottom: '1rem',
-              }}
-            >
-              Hello there!
-            </h1>
-
-            <p
-              style={{
-                fontSize: '1.05rem',
-                color: 'var(--text-secondary)',
-                maxWidth: '680px',
-                lineHeight: 1.6,
-              }}
-            >
-              Explore our premier flagship competitions, workshops, and team challenges.
-              Register in seconds and claim your instant verified digital venue pass.
-            </p>
-          </div>
-
-          {/* Quick Ticket Lookup Trigger */}
-          <button
-            onClick={() => setLookupOpen(true)}
-            className="glass-btn"
+      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '2.5rem 2rem 5rem' }}>
+        {/* Top Description (without hero text) */}
+        <div style={{ marginBottom: '1.75rem' }}>
+          <p
             style={{
-              padding: '0.85rem 1.4rem',
-              gap: '0.65rem',
-              fontSize: '0.85rem',
-              color: 'var(--gold-bright)',
-              borderColor: 'rgba(212, 175, 55, 0.35)',
+              fontSize: '1.02rem',
+              color: 'var(--text-secondary)',
+              maxWidth: '680px',
+              lineHeight: 1.6,
+              margin: 0,
             }}
           >
-            <Ticket size={16} color="#D4AF37" />
-            <span>Find My Pass</span>
-          </button>
+            Browse flagship competitions, individual battles, and team squad challenges.
+            Register in seconds and claim your instant verified digital entry pass.
+          </p>
         </div>
+
 
         {/* Filter and Search Bar */}
         <div
@@ -352,11 +304,6 @@ export default function ParticipantPage() {
             onClose={() => setSelectedEvent(null)}
             onRegistered={refreshEvents}
           />
-        )}
-
-        {/* Find My Ticket Pass Modal */}
-        {lookupOpen && (
-          <LookupTicketModal onClose={() => setLookupOpen(false)} />
         )}
       </div>
     </>

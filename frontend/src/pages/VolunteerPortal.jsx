@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -24,6 +24,7 @@ import {
   QrCode,
   Sparkles,
   ChevronRight,
+  ChevronDown,
   RotateCcw,
   Settings,
   Calendar,
@@ -51,6 +52,12 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
   const [updatingId, setUpdatingId] = useState(null);
   const [inspectRegistration, setInspectRegistration] = useState(null);
 
+  // Event Status Multi-Filters & Dropdown
+  const [attendanceFilter, setAttendanceFilter] = useState('ALL'); // 'ALL' | 'CHECKED_IN' | 'UNCHECKED_IN'
+  const [paymentFilter, setPaymentFilter] = useState('ALL'); // 'ALL' | 'OFFLINE' | 'ONLINE'
+  const [eventDropdownOpen, setEventDropdownOpen] = useState(false);
+  const eventDropdownRef = useRef(null);
+
   // Admin section states
   const [allEvents, setAllEvents] = useState([]);
   const [volunteers, setVolunteers] = useState([]);
@@ -66,6 +73,8 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
 
   // Manual Spot Registration state
   const [manualEventId, setManualEventId] = useState('');
+  const [manualDropdownOpen, setManualDropdownOpen] = useState(false);
+  const manualDropdownRef = useRef(null);
   const [manualPaymentMode, setManualPaymentMode] = useState('OFFLINE'); // 'OFFLINE' | 'ONLINE'
   const [manualSubmitting, setManualSubmitting] = useState(false);
   const [manualSuccessTicket, setManualSuccessTicket] = useState(null);
@@ -117,15 +126,15 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
   // Settings State
   const [festSettings, setFestSettings] = useState(() => {
     const saved = localStorage.getItem('asthra_fest_settings');
-    return saved
-      ? JSON.parse(saved)
-      : {
-          fest_name: 'Asthra 26',
-          venue_name: 'Main Campus & Tech Auditorium',
-          contact_email: 'fest@asthra26.org',
-          contact_phone: '+91 98765 43210',
-          cash_desk_note: 'Please verify the currency notes and immediately hand over the stamped token pass.',
-        };
+    const defaultSettings = {
+      fest_name: 'Asthra 26',
+      venue_name: 'Main Campus & Tech Auditorium',
+      contact_email: 'fest@asthra26.org',
+      contact_phone: '+91 98765 43210',
+      cash_desk_note: 'Please verify the currency notes and immediately hand over the stamped token pass.',
+      hide_on_delete: true,
+    };
+    return saved ? { ...defaultSettings, ...JSON.parse(saved) } : defaultSettings;
   });
 
   const isAdmin = user && (user.role === 'ADMIN' || user.id === '00000000-0000-0000-0000-000000000001');
@@ -144,6 +153,24 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
       fetchEventRegistrations(selectedEventId);
     }
   }, [selectedEventId]);
+
+  // Close event and manual dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (eventDropdownRef.current && !eventDropdownRef.current.contains(e.target)) {
+        setEventDropdownOpen(false);
+      }
+      if (manualDropdownRef.current && !manualDropdownRef.current.contains(e.target)) {
+        setManualDropdownOpen(false);
+      }
+    };
+    if (eventDropdownOpen || manualDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [eventDropdownOpen, manualDropdownOpen]);
 
   // Load all participants when admin enters 'participants' tab
   useEffect(() => {
@@ -232,6 +259,12 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
   };
 
   const handleToggleAttendance = async (reg) => {
+    // The undo function is only available for the admin
+    if (reg.attendance_status === 'PRESENT' && !isAdmin) {
+      toast.info('Only an administrator can revert a confirmed check-in.');
+      return;
+    }
+
     const nextStatus = reg.attendance_status === 'PRESENT' ? 'NOT_ATTENDED' : 'PRESENT';
     const isMarkingPresent = nextStatus === 'PRESENT';
 
@@ -268,6 +301,43 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
       toast.error(`Attendance update error: ${err.message}`);
     } finally {
       setUpdatingId(null);
+    }
+  };
+
+  const handleDeleteParticipant = async (reg) => {
+    const hideOnDelete = festSettings.hide_on_delete ?? true;
+
+    if (hideOnDelete) {
+      if (!confirm(`Hide participant "${reg.primary_name}"? Their record will be archived as Hidden and excluded from public rosters.`)) return;
+      try {
+        await api.updateAttendance(reg.id, 'HIDDEN');
+        toast.success(`Participant "${reg.primary_name}" is now hidden.`);
+        fetchAdminRegistrations();
+        if (selectedEventId) fetchEventRegistrations(selectedEventId);
+      } catch (err) {
+        toast.error(`Failed to hide participant: ${err.message}`);
+      }
+    } else {
+      if (!confirm(`Permanently DELETE participant "${reg.primary_name}"? This action CANNOT be undone.`)) return;
+      try {
+        await api.deleteRegistration(reg.id);
+        toast.success(`Participant "${reg.primary_name}" permanently deleted.`);
+        fetchAdminRegistrations();
+        if (selectedEventId) fetchEventRegistrations(selectedEventId);
+      } catch (err) {
+        toast.error(`Failed to delete participant: ${err.message}`);
+      }
+    }
+  };
+
+  const handleRestoreParticipant = async (reg) => {
+    try {
+      await api.updateAttendance(reg.id, 'NOT_ATTENDED');
+      toast.success(`Restored participant "${reg.primary_name}" to active roster.`);
+      fetchAdminRegistrations();
+      if (selectedEventId) fetchEventRegistrations(selectedEventId);
+    } catch (err) {
+      toast.error(`Failed to restore participant: ${err.message}`);
     }
   };
 
@@ -444,14 +514,14 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
 
       const formattedTeammates = isManualTeam
         ? manualForm.team_members.map((m) => ({
-            full_name: m.full_name.trim(),
-            email: m.email.trim(),
-            phone: m.phone.trim(),
-            college_name: m.same_as_primary ? manualForm.college_name.trim() : (m.college_name || manualForm.college_name).trim(),
-            course_and_semester: m.same_as_primary
-              ? manualForm.course_and_semester.trim()
-              : (m.course_and_semester || manualForm.course_and_semester).trim(),
-          }))
+          full_name: m.full_name.trim(),
+          email: m.email.trim(),
+          phone: m.phone.trim(),
+          college_name: m.same_as_primary ? manualForm.college_name.trim() : (m.college_name || manualForm.college_name).trim(),
+          course_and_semester: m.same_as_primary
+            ? manualForm.course_and_semester.trim()
+            : (m.course_and_semester || manualForm.course_and_semester).trim(),
+        }))
         : [];
 
       const payload = {
@@ -508,18 +578,36 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
     }
   };
 
-  // Filter registrations in event status view
+  // Filter registrations in event status view based on selected filters and search query
   const filteredRegistrations = useMemo(() => {
     return registrations.filter((r) => {
-      const term = searchTerm.toLowerCase();
-      return (
-        r.primary_name?.toLowerCase().includes(term) ||
-        r.registration_code?.toLowerCase().includes(term) ||
-        r.primary_phone?.includes(term) ||
-        (r.team_name && r.team_name.toLowerCase().includes(term))
-      );
+      // 1. Attendance filter
+      if (attendanceFilter === 'CHECKED_IN' && r.attendance_status !== 'PRESENT') return false;
+      if (attendanceFilter === 'UNCHECKED_IN' && r.attendance_status === 'PRESENT') return false;
+
+      // 2. Payment mode filter
+      if (paymentFilter === 'OFFLINE' && r.payment_mode !== 'OFFLINE') return false;
+      if (paymentFilter === 'ONLINE' && r.payment_mode !== 'ONLINE') return false;
+
+      // 3. Search query filter
+      if (searchTerm.trim()) {
+        const term = searchTerm.toLowerCase().trim();
+        const matchName = r.primary_name?.toLowerCase().includes(term);
+        const matchCode = r.registration_code?.toLowerCase().includes(term);
+        const matchPhone = r.primary_phone?.includes(term);
+        const matchCollege = r.college_name?.toLowerCase().includes(term);
+        const matchTeam = r.team_name && r.team_name.toLowerCase().includes(term);
+        const matchTeammates = r.team_members?.some((m) =>
+          m.full_name?.toLowerCase().includes(term) || m.phone?.includes(term)
+        );
+        if (!matchName && !matchCode && !matchPhone && !matchCollege && !matchTeam && !matchTeammates) {
+          return false;
+        }
+      }
+
+      return true;
     });
-  }, [registrations, searchTerm]);
+  }, [registrations, attendanceFilter, paymentFilter, searchTerm]);
 
   const attendedCount = registrations.filter((r) => r.attendance_status === 'PRESENT').length;
 
@@ -621,16 +709,13 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
 
   // 2. LOGGED IN PORTAL VIEWS
   return (
-    <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '2.5rem 2rem 5rem' }}>
+    <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '2.5rem 2rem 5rem 5.5rem' }}>
       {/* ======================================================== */}
       {/* 1. SECTION: VIEW EVENT STATUS (Attendance check-in)       */}
       {/* ======================================================== */}
       {activeSection === 'status' && (
         <div>
           <div style={{ marginBottom: '2rem' }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--gold-bright)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
-              Attendance Roster
-            </div>
             <h1 className="font-display gold-text-glow" style={{ fontSize: '2.2rem', fontWeight: '800', lineHeight: 1.2 }}>
               Event Status & Check-In
             </h1>
@@ -659,27 +744,7 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
             </div>
           ) : (
             <div>
-              {/* Event Selector Tabs */}
-              <div style={{ display: 'flex', gap: '0.75rem', overflowX: 'auto', paddingBottom: '0.5rem', marginBottom: '1.5rem' }}>
-                {assignedEvents.map((ev) => (
-                  <button
-                    key={ev.id}
-                    onClick={() => setSelectedEventId(ev.id)}
-                    className={`neu-btn ${selectedEventId === ev.id ? 'active' : ''}`}
-                    style={{
-                      padding: '0.75rem 1.4rem',
-                      whiteSpace: 'nowrap',
-                      textAlign: 'left',
-                      borderRadius: '14px',
-                    }}
-                  >
-                    <div style={{ fontWeight: '700', fontSize: '0.9rem' }}>{ev.title}</div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{ev.venue || 'Main Venue'}</div>
-                  </button>
-                ))}
-              </div>
-
-              {/* Turnout Summary Bar */}
+              {/* Turnout Summary Bar (Progress Div) */}
               <div
                 style={{
                   display: 'flex',
@@ -715,12 +780,300 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
                 </div>
               </div>
 
-              {/* Search Bar */}
+              {/* Event Dropdown & Multi-Filter Control Bar (under the progress div) */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: '1.25rem',
+                  padding: '1.1rem 1.4rem',
+                  borderRadius: '16px',
+                  background: 'var(--bg-card)',
+                  border: '1px solid rgba(212, 175, 55, 0.2)',
+                  boxShadow: 'var(--neu-shadow-flat)',
+                  marginBottom: '1.25rem',
+                }}
+              >
+                {/* Event Dropdown Selector (Custom Styled Glass Dropdown) */}
+                <div ref={eventDropdownRef} style={{ position: 'relative', minWidth: '260px', flex: '1 1 280px' }}>
+                  <label
+                    style={{
+                      display: 'block',
+                      fontSize: '0.72rem',
+                      fontWeight: '700',
+                      color: 'var(--gold-bright)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.08em',
+                      marginBottom: '0.4rem',
+                    }}
+                  >
+                    Select Event
+                  </label>
+
+                  {/* Trigger Button with full text visibility and rich gold styling */}
+                  <button
+                    type="button"
+                    onClick={() => setEventDropdownOpen((prev) => !prev)}
+                    style={{
+                      width: '100%',
+                      minHeight: '46px',
+                      padding: '0.65rem 1rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '0.75rem',
+                      background: 'var(--bg-inset)',
+                      border: eventDropdownOpen ? '1px solid var(--gold-bright)' : '1px solid rgba(212, 175, 55, 0.35)',
+                      borderRadius: '12px',
+                      cursor: 'pointer',
+                      boxShadow: eventDropdownOpen ? '0 0 14px rgba(212, 175, 55, 0.25)' : 'var(--glass-shadow-inset)',
+                      transition: 'all 0.2s ease',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', overflow: 'hidden', flex: 1 }}>
+                      <Calendar size={16} color="#D4AF37" style={{ flexShrink: 0 }} />
+                      <span
+                        style={{
+                          fontSize: '0.92rem',
+                          fontWeight: '700',
+                          color: 'var(--gold-bright)',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}
+                      >
+                        {assignedEvents.find((e) => e.id === selectedEventId)?.title || 'Select Event'}
+                      </span>
+                      {assignedEvents.find((e) => e.id === selectedEventId)?.venue && (
+                        <span
+                          style={{
+                            fontSize: '0.72rem',
+                            color: 'var(--text-muted)',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            background: 'rgba(255, 255, 255, 0.06)',
+                            border: '1px solid rgba(255, 255, 255, 0.08)',
+                            padding: '0.15rem 0.45rem',
+                            borderRadius: '6px',
+                            flexShrink: 0,
+                          }}
+                        >
+                          {assignedEvents.find((e) => e.id === selectedEventId)?.venue}
+                        </span>
+                      )}
+                    </div>
+
+                    <ChevronDown
+                      size={16}
+                      color="#D4AF37"
+                      style={{
+                        flexShrink: 0,
+                        transform: eventDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                        transition: 'transform 0.2s ease',
+                      }}
+                    />
+                  </button>
+
+                  {/* Dropdown Menu Options */}
+                  {eventDropdownOpen && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 'calc(100% + 6px)',
+                        left: 0,
+                        right: 0,
+                        maxHeight: '260px',
+                        overflowY: 'auto',
+                        background: 'rgba(15, 15, 24, 0.98)',
+                        backdropFilter: 'blur(20px)',
+                        WebkitBackdropFilter: 'blur(20px)',
+                        border: '1px solid rgba(212, 175, 55, 0.35)',
+                        borderRadius: '14px',
+                        boxShadow: '0 12px 36px rgba(0, 0, 0, 0.85), 0 0 15px rgba(212, 175, 55, 0.15)',
+                        padding: '0.45rem',
+                        zIndex: 100,
+                        animation: 'fadeIn 0.15s ease-out',
+                      }}
+                    >
+                      {assignedEvents.map((ev) => {
+                        const isSelected = selectedEventId === ev.id;
+                        return (
+                          <div
+                            key={ev.id}
+                            onClick={() => {
+                              setSelectedEventId(ev.id);
+                              setEventDropdownOpen(false);
+                            }}
+                            style={{
+                              padding: '0.65rem 0.85rem',
+                              borderRadius: '10px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              gap: '0.75rem',
+                              background: isSelected ? 'rgba(212, 175, 55, 0.15)' : 'transparent',
+                              border: isSelected ? '1px solid rgba(212, 175, 55, 0.3)' : '1px solid transparent',
+                              transition: 'all 0.15s ease',
+                              marginBottom: '0.25rem',
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!isSelected) {
+                                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (!isSelected) {
+                                e.currentTarget.style.background = 'transparent';
+                              }
+                            }}
+                          >
+                            <div style={{ overflow: 'hidden' }}>
+                              <div
+                                style={{
+                                  fontSize: '0.88rem',
+                                  fontWeight: isSelected ? '700' : '600',
+                                  color: isSelected ? 'var(--gold-bright)' : 'var(--text-white)',
+                                  whiteSpace: 'nowrap',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                }}
+                              >
+                                {ev.title}
+                              </div>
+                              {ev.venue && (
+                                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
+                                  📍 {ev.venue}
+                                </div>
+                              )}
+                            </div>
+
+                            {isSelected && <CheckCircle size={15} color="#F5D77F" style={{ flexShrink: 0 }} />}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Multi-Selection Filter Pills */}
+                <div style={{ flex: '2 1 420px', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  <div style={{ fontSize: '0.72rem', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                    Quick Status Filters
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    {/* Checked in students */}
+                    <button
+                      type="button"
+                      onClick={() => setAttendanceFilter((prev) => (prev === 'CHECKED_IN' ? 'ALL' : 'CHECKED_IN'))}
+                      style={{
+                        padding: '0.45rem 0.85rem',
+                        borderRadius: '10px',
+                        fontSize: '0.8rem',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        background: attendanceFilter === 'CHECKED_IN' ? 'rgba(16, 185, 129, 0.2)' : 'var(--bg-inset)',
+                        border: attendanceFilter === 'CHECKED_IN' ? '1px solid #10B981' : '1px solid rgba(255, 255, 255, 0.08)',
+                        color: attendanceFilter === 'CHECKED_IN' ? '#34D399' : 'var(--text-secondary)',
+                      }}
+                    >
+                      ✓ Checked In
+                    </button>
+
+                    {/* Unchecked in students */}
+                    <button
+                      type="button"
+                      onClick={() => setAttendanceFilter((prev) => (prev === 'UNCHECKED_IN' ? 'ALL' : 'UNCHECKED_IN'))}
+                      style={{
+                        padding: '0.45rem 0.85rem',
+                        borderRadius: '10px',
+                        fontSize: '0.8rem',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        background: attendanceFilter === 'UNCHECKED_IN' ? 'rgba(212, 175, 55, 0.2)' : 'var(--bg-inset)',
+                        border: attendanceFilter === 'UNCHECKED_IN' ? '1px solid var(--gold-bright)' : '1px solid rgba(255, 255, 255, 0.08)',
+                        color: attendanceFilter === 'UNCHECKED_IN' ? 'var(--gold-bright)' : 'var(--text-secondary)',
+                      }}
+                    >
+                      ⏳ Unchecked In
+                    </button>
+
+                    {/* Offline cash */}
+                    <button
+                      type="button"
+                      onClick={() => setPaymentFilter((prev) => (prev === 'OFFLINE' ? 'ALL' : 'OFFLINE'))}
+                      style={{
+                        padding: '0.45rem 0.85rem',
+                        borderRadius: '10px',
+                        fontSize: '0.8rem',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        background: paymentFilter === 'OFFLINE' ? 'rgba(212, 175, 55, 0.2)' : 'var(--bg-inset)',
+                        border: paymentFilter === 'OFFLINE' ? '1px solid var(--gold-bright)' : '1px solid rgba(255, 255, 255, 0.08)',
+                        color: paymentFilter === 'OFFLINE' ? 'var(--gold-bright)' : 'var(--text-secondary)',
+                      }}
+                    >
+                      💵 Offline Cash
+                    </button>
+
+                    {/* Online */}
+                    <button
+                      type="button"
+                      onClick={() => setPaymentFilter((prev) => (prev === 'ONLINE' ? 'ALL' : 'ONLINE'))}
+                      style={{
+                        padding: '0.45rem 0.85rem',
+                        borderRadius: '10px',
+                        fontSize: '0.8rem',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        background: paymentFilter === 'ONLINE' ? 'rgba(59, 130, 246, 0.2)' : 'var(--bg-inset)',
+                        border: paymentFilter === 'ONLINE' ? '1px solid #60A5FA' : '1px solid rgba(255, 255, 255, 0.08)',
+                        color: paymentFilter === 'ONLINE' ? '#60A5FA' : 'var(--text-secondary)',
+                      }}
+                    >
+                      💳 Online
+                    </button>
+
+                    {/* Reset Filters button when active */}
+                    {(attendanceFilter !== 'ALL' || paymentFilter !== 'ALL') && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAttendanceFilter('ALL');
+                          setPaymentFilter('ALL');
+                        }}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--text-muted)',
+                          fontSize: '0.75rem',
+                          cursor: 'pointer',
+                          textDecoration: 'underline',
+                          marginLeft: '0.35rem',
+                        }}
+                      >
+                        Reset Filters
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Search Bar (Works based on selected filters above) */}
               <div style={{ position: 'relative', marginBottom: '1.5rem' }}>
                 <Search size={18} color="var(--text-muted)" style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)' }} />
                 <input
                   type="text"
-                  placeholder="Search code, participant name, phone, team..."
+                  placeholder="Search filtered participants by name, code, phone, team, or college..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="neu-input"
@@ -743,7 +1096,7 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
                     color: 'var(--text-secondary)',
                   }}
                 >
-                  No participants registered yet or no match found.
+                  No participants registered yet or no match found for active filters.
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
@@ -761,14 +1114,14 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'space-between',
-                          flexWrap: 'wrap',
-                          gap: '1rem',
+                          gap: '1.5rem',
                           borderLeft: isPresent ? '4px solid #10B981' : '4px solid rgba(212, 175, 55, 0.4)',
+                          minHeight: '84px',
                         }}
                       >
-                        {/* Participant info */}
-                        <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
+                        {/* Participant info (left side) */}
+                        <div style={{ flex: '1 1 auto', minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.35rem', flexWrap: 'wrap' }}>
                             <span
                               className="font-mono"
                               style={{
@@ -782,7 +1135,7 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
                             >
                               {reg.registration_code}
                             </span>
-                            <span style={{ fontSize: '1.1rem', fontWeight: '700', color: 'var(--text-white)' }}>
+                            <span style={{ fontSize: '1.08rem', fontWeight: '700', color: 'var(--text-white)' }}>
                               {reg.primary_name}
                             </span>
                             {reg.team_name && (
@@ -811,39 +1164,80 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
                           </div>
                         </div>
 
-                        {/* Actions */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        {/* Action Buttons: Fixed width container and fixed button sizes for perfect vertical alignment across cards */}
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.75rem',
+                            flexShrink: 0,
+                            width: '240px',
+                            justifyContent: 'flex-end',
+                          }}
+                        >
+                          {/* Details Button */}
                           <button
                             onClick={async () => {
                               const full = await api.getRegistration(reg.id);
                               setInspectRegistration(full);
                             }}
                             className="neu-btn"
-                            style={{ fontSize: '0.78rem', padding: '0.55rem 0.85rem' }}
+                            style={{
+                              width: '95px',
+                              height: '40px',
+                              padding: 0,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '0.35rem',
+                              fontSize: '0.8rem',
+                              flexShrink: 0,
+                            }}
                           >
-                            <Eye size={14} /> Details
+                            <Eye size={14} />
+                            <span>Details</span>
                           </button>
 
+                          {/* Check In / Entered Button:
+                              - Text: 'Check In' when not checked in
+                              - Text: 'Entered' when checked in
+                              - Undo only available for admin
+                              - No undo text written on button
+                          */}
                           <button
                             onClick={() => handleToggleAttendance(reg)}
-                            disabled={updatingId === reg.id}
+                            disabled={updatingId === reg.id || (isPresent && !isAdmin)}
                             className={isPresent ? 'neu-btn' : 'neu-btn-gold'}
+                            title={isPresent && isAdmin ? 'Click to revert check-in' : undefined}
                             style={{
-                              padding: '0.65rem 1.35rem',
+                              width: '125px',
+                              height: '40px',
+                              padding: 0,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '0.4rem',
                               fontSize: '0.82rem',
+                              fontWeight: '700',
+                              flexShrink: 0,
                               background: isPresent ? 'rgba(16, 185, 129, 0.15)' : undefined,
                               borderColor: isPresent ? '#10B981' : undefined,
                               color: isPresent ? '#34D399' : undefined,
+                              cursor: isPresent && !isAdmin ? 'default' : 'pointer',
                             }}
                           >
                             {updatingId === reg.id ? (
                               'Updating...'
                             ) : isPresent ? (
                               <>
-                                <CheckCircle size={15} /> Entered (Undo)
+                                <CheckCircle size={15} />
+                                <span>Entered</span>
                               </>
                             ) : (
-                              'Check In / Enter Hall'
+                              <>
+                                <CheckCircle size={15} />
+                                <span>Check In</span>
+                              </>
                             )}
                           </button>
                         </div>
@@ -861,12 +1255,9 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
       {/* 2. SECTION: MANUAL / SPOT REGISTRATION (Online & Offline) */}
       {/* ======================================================== */}
       {activeSection === 'manual_reg' && (
-        <div style={{ maxWidth: '720px', margin: '0 auto' }}>
-          <div style={{ marginBottom: '2rem' }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--gold-bright)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
-              Volunteer Desk Service
-            </div>
-            <h1 className="font-display gold-text-glow" style={{ fontSize: '2.2rem', fontWeight: '800' }}>
+        <div style={{ maxWidth: '1240px', margin: '0 auto' }}>
+          <div style={{ marginBottom: '1.5rem' }}>
+            <h1 className="font-display gold-text-glow" style={{ fontSize: '2.2rem', fontWeight: '800', lineHeight: 1.2 }}>
               Manual Spot Registration
             </h1>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
@@ -880,252 +1271,464 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
             </div>
           ) : (
             <div style={{ background: 'var(--bg-card)', borderRadius: '24px', border: '1px solid rgba(212, 175, 55, 0.25)', padding: '2rem', boxShadow: 'var(--neu-shadow-flat)' }}>
-              <form onSubmit={handleManualSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                {/* Event Selector */}
-                <div>
-                  <label style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--gold-bright)', textTransform: 'uppercase', marginBottom: '0.4rem', display: 'block' }}>
-                    Select Event *
-                  </label>
-                  <select
-                    value={manualEventId}
-                    onChange={(e) => setManualEventId(e.target.value)}
-                    className="neu-input"
-                    style={{ cursor: 'pointer' }}
-                  >
-                    {availableManualEvents.map((ev) => (
-                      <option key={ev.id} value={ev.id}>
-                        {ev.title} — ₹{parseFloat(ev.registration_fee || 0).toFixed(0)} ({ev.event_type})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <form onSubmit={handleManualSubmit}>
+                {/* Horizontal 2-Column Form Layout: Minimizes vertical scrolling */}
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+                    gap: '2.5rem',
+                    alignItems: 'start',
+                  }}
+                >
+                  {/* Left Column: Event Selector & Payment Mode */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                    {/* Event Selector (Custom Styled Glass Dropdown) */}
+                    <div ref={manualDropdownRef} style={{ position: 'relative' }}>
+                      <label
+                        style={{
+                          display: 'block',
+                          fontSize: '0.72rem',
+                          fontWeight: '700',
+                          color: 'var(--gold-bright)',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.08em',
+                          marginBottom: '0.4rem',
+                        }}
+                      >
+                        Select Event *
+                      </label>
 
-                {/* Payment Mode Selector: Offline Cash vs Online QR */}
-                <div>
-                  <label style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--gold-bright)', textTransform: 'uppercase', marginBottom: '0.4rem', display: 'block' }}>
-                    Payment Mode *
-                  </label>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                    <div
-                      onClick={() => setManualPaymentMode('OFFLINE')}
-                      style={{
-                        padding: '1rem',
-                        borderRadius: '14px',
-                        background: manualPaymentMode === 'OFFLINE' ? 'rgba(212, 175, 55, 0.15)' : 'var(--bg-inset)',
-                        border: manualPaymentMode === 'OFFLINE' ? '2px solid var(--gold-bright)' : '1px solid rgba(255,255,255,0.06)',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.75rem',
-                      }}
-                    >
-                      <Banknote size={24} color={manualPaymentMode === 'OFFLINE' ? '#F5D77F' : 'var(--text-muted)'} />
-                      <div>
-                        <div style={{ fontWeight: '700', fontSize: '0.9rem', color: 'var(--text-white)' }}>Cash / Offline</div>
-                        <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Collect physical cash at desk</div>
-                      </div>
-                    </div>
+                      {/* Trigger Button with full text visibility and rich gold styling */}
+                      <button
+                        type="button"
+                        onClick={() => setManualDropdownOpen((prev) => !prev)}
+                        style={{
+                          width: '100%',
+                          minHeight: '46px',
+                          padding: '0.65rem 1rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: '0.75rem',
+                          background: 'var(--bg-inset)',
+                          border: manualDropdownOpen ? '1px solid var(--gold-bright)' : '1px solid rgba(212, 175, 55, 0.35)',
+                          borderRadius: '12px',
+                          cursor: 'pointer',
+                          boxShadow: manualDropdownOpen ? '0 0 14px rgba(212, 175, 55, 0.25)' : 'var(--glass-shadow-inset)',
+                          transition: 'all 0.2s ease',
+                          textAlign: 'left',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', overflow: 'hidden', flex: 1 }}>
+                          <Calendar size={16} color="#D4AF37" style={{ flexShrink: 0 }} />
+                          <span
+                            style={{
+                              fontSize: '0.92rem',
+                              fontWeight: '700',
+                              color: 'var(--gold-bright)',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                            }}
+                          >
+                            {currentSelectedManualEvent?.title || 'Select Event'}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: '0.72rem',
+                              color: manualFee > 0 ? 'var(--gold-bright)' : '#34D399',
+                              fontWeight: '700',
+                              background: manualFee > 0 ? 'rgba(212, 175, 55, 0.12)' : 'rgba(16, 185, 129, 0.12)',
+                              border: manualFee > 0 ? '1px solid rgba(212, 175, 55, 0.3)' : '1px solid rgba(16, 185, 129, 0.25)',
+                              padding: '0.15rem 0.5rem',
+                              borderRadius: '6px',
+                              flexShrink: 0,
+                            }}
+                          >
+                            {manualFee > 0 ? `₹${manualFee.toFixed(0)}` : 'Free'}
+                          </span>
+                          {currentSelectedManualEvent?.venue && (
+                            <span
+                              style={{
+                                fontSize: '0.72rem',
+                                color: 'var(--text-muted)',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                background: 'rgba(255, 255, 255, 0.06)',
+                                border: '1px solid rgba(255, 255, 255, 0.08)',
+                                padding: '0.15rem 0.45rem',
+                                borderRadius: '6px',
+                                flexShrink: 0,
+                              }}
+                            >
+                              {currentSelectedManualEvent.venue}
+                            </span>
+                          )}
+                        </div>
 
-                    <div
-                      onClick={() => setManualPaymentMode('ONLINE')}
-                      style={{
-                        padding: '1rem',
-                        borderRadius: '14px',
-                        background: manualPaymentMode === 'ONLINE' ? 'rgba(212, 175, 55, 0.15)' : 'var(--bg-inset)',
-                        border: manualPaymentMode === 'ONLINE' ? '2px solid var(--gold-bright)' : '1px solid rgba(255,255,255,0.06)',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.75rem',
-                      }}
-                    >
-                      <QrCode size={24} color={manualPaymentMode === 'ONLINE' ? '#F5D77F' : 'var(--text-muted)'} />
-                      <div>
-                        <div style={{ fontWeight: '700', fontSize: '0.9rem', color: 'var(--text-white)' }}>Online Gateway / QR</div>
-                        <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Show QR to scan & pay</div>
-                      </div>
-                    </div>
-                  </div>
+                        <ChevronDown
+                          size={16}
+                          color="#D4AF37"
+                          style={{
+                            flexShrink: 0,
+                            transform: manualDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                            transition: 'transform 0.2s ease',
+                          }}
+                        />
+                      </button>
 
-                  {manualPaymentMode === 'OFFLINE' && manualFee > 0 && (
-                    <div
-                      style={{
-                        marginTop: '0.75rem',
-                        padding: '0.85rem 1rem',
-                        borderRadius: '10px',
-                        background: 'rgba(16, 185, 129, 0.12)',
-                        border: '1px solid #10B981',
-                        color: '#34D399',
-                        fontSize: '0.88rem',
-                        fontWeight: '700',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem',
-                      }}
-                    >
-                      <DollarSign size={18} />
-                      <span>Collect ₹{manualFee.toFixed(0)} in cash from participant.</span>
-                    </div>
-                  )}
-                </div>
+                      {/* Dropdown Menu Options */}
+                      {manualDropdownOpen && (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: 'calc(100% + 6px)',
+                            left: 0,
+                            right: 0,
+                            maxHeight: '260px',
+                            overflowY: 'auto',
+                            background: 'rgba(15, 15, 24, 0.98)',
+                            backdropFilter: 'blur(20px)',
+                            WebkitBackdropFilter: 'blur(20px)',
+                            border: '1px solid rgba(212, 175, 55, 0.35)',
+                            borderRadius: '14px',
+                            boxShadow: '0 12px 36px rgba(0, 0, 0, 0.85), 0 0 15px rgba(212, 175, 55, 0.15)',
+                            padding: '0.45rem',
+                            zIndex: 100,
+                            animation: 'fadeIn 0.15s ease-out',
+                          }}
+                        >
+                          {availableManualEvents.map((ev) => {
+                            const isSelected = (manualEventId || currentSelectedManualEvent?.id) === ev.id;
+                            const evFee = parseFloat(ev.registration_fee || 0);
+                            return (
+                              <div
+                                key={ev.id}
+                                onClick={() => {
+                                  setManualEventId(ev.id);
+                                  setManualDropdownOpen(false);
+                                }}
+                                style={{
+                                  padding: '0.65rem 0.85rem',
+                                  borderRadius: '10px',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  gap: '0.75rem',
+                                  background: isSelected ? 'rgba(212, 175, 55, 0.15)' : 'transparent',
+                                  border: isSelected ? '1px solid rgba(212, 175, 55, 0.3)' : '1px solid transparent',
+                                  transition: 'all 0.15s ease',
+                                  marginBottom: '0.25rem',
+                                }}
+                                onMouseEnter={(e) => {
+                                  if (!isSelected) {
+                                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)';
+                                  }
+                                }}
+                                onMouseLeave={(e) => {
+                                  if (!isSelected) {
+                                    e.currentTarget.style.background = 'transparent';
+                                  }
+                                }}
+                              >
+                                <div style={{ overflow: 'hidden' }}>
+                                  <div
+                                    style={{
+                                      fontSize: '0.88rem',
+                                      fontWeight: isSelected ? '700' : '600',
+                                      color: isSelected ? 'var(--gold-bright)' : 'var(--text-white)',
+                                      whiteSpace: 'nowrap',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                    }}
+                                  >
+                                    {ev.title}
+                                  </div>
+                                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.1rem', display: 'flex', gap: '0.5rem' }}>
+                                    <span style={{ color: evFee > 0 ? 'var(--gold-bright)' : '#34D399', fontWeight: '600' }}>
+                                      {evFee > 0 ? `₹${evFee.toFixed(0)}` : 'Free'}
+                                    </span>
+                                    <span>• {ev.event_type}</span>
+                                    {ev.venue && <span>• 📍 {ev.venue}</span>}
+                                  </div>
+                                </div>
 
-                {/* Team Name if group event */}
-                {isManualTeam && (
-                  <div>
-                    <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.3rem', display: 'block' }}>
-                      Team Name *
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Official Team Name"
-                      value={manualForm.team_name}
-                      onChange={(e) => setManualForm({ ...manualForm, team_name: e.target.value })}
-                      className="neu-input"
-                      required
-                    />
-                  </div>
-                )}
-
-                {/* Primary details */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                  <div>
-                    <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.3rem', display: 'block' }}>
-                      Participant Name *
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Full Name"
-                      value={manualForm.primary_name}
-                      onChange={(e) => setManualForm({ ...manualForm, primary_name: e.target.value })}
-                      className="neu-input"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.3rem', display: 'block' }}>
-                      Email Address *
-                    </label>
-                    <input
-                      type="email"
-                      placeholder="email@domain.com"
-                      value={manualForm.primary_email}
-                      onChange={(e) => setManualForm({ ...manualForm, primary_email: e.target.value })}
-                      className="neu-input"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                  <div>
-                    <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.3rem', display: 'block' }}>
-                      Phone Number *
-                    </label>
-                    <input
-                      type="tel"
-                      placeholder="10-digit phone"
-                      value={manualForm.primary_phone}
-                      onChange={(e) => setManualForm({ ...manualForm, primary_phone: e.target.value })}
-                      className="neu-input"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.3rem', display: 'block' }}>
-                      College / Institution *
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="College Name"
-                      value={manualForm.college_name}
-                      onChange={(e) => setManualForm({ ...manualForm, college_name: e.target.value })}
-                      className="neu-input"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.3rem', display: 'block' }}>
-                    Course and Semester *
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. B.Tech CSE, Sem 6"
-                    value={manualForm.course_and_semester}
-                    onChange={(e) => setManualForm({ ...manualForm, course_and_semester: e.target.value })}
-                    className="neu-input"
-                    required
-                  />
-                </div>
-
-                {/* Teammates if group event */}
-                {isManualTeam && (
-                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '1rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                      <span style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--gold-bright)' }}>
-                        Teammates ({1 + manualForm.team_members.length} / {currentSelectedManualEvent?.max_team_size})
-                      </span>
-                      {1 + manualForm.team_members.length < (currentSelectedManualEvent?.max_team_size || 1) && (
-                        <button type="button" onClick={handleManualAddTeammate} className="glass-btn" style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem' }}>
-                          + Add Teammate
-                        </button>
+                                {isSelected && <CheckCircle size={15} color="#F5D77F" style={{ flexShrink: 0 }} />}
+                              </div>
+                            );
+                          })}
+                        </div>
                       )}
                     </div>
 
-                    {manualForm.team_members.map((tm, idx) => (
-                      <div key={idx} style={{ background: 'var(--bg-inset)', padding: '0.85rem', borderRadius: '10px', marginBottom: '0.65rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Teammate #{idx + 1}</span>
-                          <button type="button" onClick={() => handleManualRemoveTeammate(idx)} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer' }}>
-                            <Trash2 size={14} />
-                          </button>
+                    {/* Payment Mode Selector: Offline Cash vs Online QR */}
+                    <div>
+                      <label style={{ fontSize: '0.72rem', fontWeight: '700', color: 'var(--gold-bright)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.4rem', display: 'block' }}>
+                        Payment Mode *
+                      </label>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
+                        <div
+                          onClick={() => setManualPaymentMode('OFFLINE')}
+                          style={{
+                            padding: '0.85rem',
+                            borderRadius: '12px',
+                            background: manualPaymentMode === 'OFFLINE' ? 'rgba(212, 175, 55, 0.15)' : 'var(--bg-inset)',
+                            border: manualPaymentMode === 'OFFLINE' ? '2px solid var(--gold-bright)' : '1px solid rgba(255,255,255,0.06)',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.65rem',
+                            transition: 'all 0.2s ease',
+                          }}
+                        >
+                          <Banknote size={22} color={manualPaymentMode === 'OFFLINE' ? '#F5D77F' : 'var(--text-muted)'} style={{ flexShrink: 0 }} />
+                          <div>
+                            <div style={{ fontWeight: '700', fontSize: '0.85rem', color: 'var(--text-white)' }}>Cash / Desk</div>
+                            <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)' }}>Collect physical cash</div>
+                          </div>
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.5rem' }}>
-                          <input
-                            type="text"
-                            placeholder="Name"
-                            value={tm.full_name}
-                            onChange={(e) => handleManualTeammateChange(idx, 'full_name', e.target.value)}
-                            className="neu-input"
-                            required
-                          />
-                          <input
-                            type="email"
-                            placeholder="Email"
-                            value={tm.email}
-                            onChange={(e) => handleManualTeammateChange(idx, 'email', e.target.value)}
-                            className="neu-input"
-                            required
-                          />
-                          <input
-                            type="tel"
-                            placeholder="Phone"
-                            value={tm.phone}
-                            onChange={(e) => handleManualTeammateChange(idx, 'phone', e.target.value)}
-                            className="neu-input"
-                            required
-                          />
+
+                        <div
+                          onClick={() => setManualPaymentMode('ONLINE')}
+                          style={{
+                            padding: '0.85rem',
+                            borderRadius: '12px',
+                            background: manualPaymentMode === 'ONLINE' ? 'rgba(212, 175, 55, 0.15)' : 'var(--bg-inset)',
+                            border: manualPaymentMode === 'ONLINE' ? '2px solid var(--gold-bright)' : '1px solid rgba(255,255,255,0.06)',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.65rem',
+                            transition: 'all 0.2s ease',
+                          }}
+                        >
+                          <QrCode size={22} color={manualPaymentMode === 'ONLINE' ? '#F5D77F' : 'var(--text-muted)'} style={{ flexShrink: 0 }} />
+                          <div>
+                            <div style={{ fontWeight: '700', fontSize: '0.85rem', color: 'var(--text-white)' }}>Online Gateway</div>
+                            <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)' }}>Scan QR on phone</div>
+                          </div>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
 
-                <button
-                  type="submit"
-                  disabled={manualSubmitting}
-                  className="neu-btn-gold"
-                  style={{ padding: '0.9rem', fontSize: '0.9rem', marginTop: '0.5rem' }}
-                >
-                  {manualSubmitting
-                    ? 'Processing Registration...'
-                    : manualPaymentMode === 'OFFLINE'
-                    ? `Confirm Spot Registration (Collect ₹${manualFee.toFixed(0)})`
-                    : 'Generate Online Payment QR'}
-                </button>
+                      {manualPaymentMode === 'OFFLINE' && manualFee > 0 && (
+                        <div
+                          style={{
+                            marginTop: '0.75rem',
+                            padding: '0.75rem 1rem',
+                            borderRadius: '10px',
+                            background: 'rgba(16, 185, 129, 0.12)',
+                            border: '1px solid #10B981',
+                            color: '#34D399',
+                            fontSize: '0.85rem',
+                            fontWeight: '700',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                          }}
+                        >
+                          <DollarSign size={16} />
+                          <span>Collect ₹{manualFee.toFixed(0)} in cash at desk.</span>
+                        </div>
+                      )}
+
+                      {manualPaymentMode === 'ONLINE' && manualFee > 0 && (
+                        <div
+                          style={{
+                            marginTop: '0.75rem',
+                            padding: '0.75rem 1rem',
+                            borderRadius: '10px',
+                            background: 'rgba(59, 130, 246, 0.12)',
+                            border: '1px solid #3B82F6',
+                            color: '#60A5FA',
+                            fontSize: '0.85rem',
+                            fontWeight: '700',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                          }}
+                        >
+                          <QrCode size={16} />
+                          <span>Clicking submit will generate dynamic payment QR.</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right Column: Participant Details & Teammates */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    {/* Primary details in compact 2-column grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
+                      <div>
+                        <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.3rem', display: 'block' }}>
+                          Participant Name *
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Full Name"
+                          value={manualForm.primary_name}
+                          onChange={(e) => setManualForm({ ...manualForm, primary_name: e.target.value })}
+                          className="neu-input"
+                          style={{ padding: '0.65rem 0.95rem', fontSize: '0.85rem' }}
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.3rem', display: 'block' }}>
+                          Phone Number *
+                        </label>
+                        <input
+                          type="tel"
+                          placeholder="10-digit phone"
+                          value={manualForm.primary_phone}
+                          onChange={(e) => setManualForm({ ...manualForm, primary_phone: e.target.value })}
+                          className="neu-input"
+                          style={{ padding: '0.65rem 0.95rem', fontSize: '0.85rem' }}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
+                      <div>
+                        <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.3rem', display: 'block' }}>
+                          Email Address *
+                        </label>
+                        <input
+                          type="email"
+                          placeholder="email@domain.com"
+                          value={manualForm.primary_email}
+                          onChange={(e) => setManualForm({ ...manualForm, primary_email: e.target.value })}
+                          className="neu-input"
+                          style={{ padding: '0.65rem 0.95rem', fontSize: '0.85rem' }}
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.3rem', display: 'block' }}>
+                          College / Institution *
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="College Name"
+                          value={manualForm.college_name}
+                          onChange={(e) => setManualForm({ ...manualForm, college_name: e.target.value })}
+                          className="neu-input"
+                          style={{ padding: '0.65rem 0.95rem', fontSize: '0.85rem' }}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: isManualTeam ? '1fr 1fr' : '1fr', gap: '0.85rem' }}>
+                      <div>
+                        <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.3rem', display: 'block' }}>
+                          Course and Semester *
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. B.Tech CSE, Sem 6"
+                          value={manualForm.course_and_semester}
+                          onChange={(e) => setManualForm({ ...manualForm, course_and_semester: e.target.value })}
+                          className="neu-input"
+                          style={{ padding: '0.65rem 0.95rem', fontSize: '0.85rem' }}
+                          required
+                        />
+                      </div>
+
+                      {/* Team Name if group event */}
+                      {isManualTeam && (
+                        <div>
+                          <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.3rem', display: 'block' }}>
+                            Team Name (Optional - auto numbered)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Leave blank for auto team number"
+                            value={manualForm.team_name}
+                            onChange={(e) => setManualForm({ ...manualForm, team_name: e.target.value })}
+                            className="neu-input"
+                            style={{ padding: '0.65rem 0.95rem', fontSize: '0.85rem' }}
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Teammates if group event */}
+                    {isManualTeam && (
+                      <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.75rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                          <span style={{ fontSize: '0.78rem', fontWeight: '700', color: 'var(--gold-bright)' }}>
+                            Teammates ({1 + manualForm.team_members.length} / {currentSelectedManualEvent?.max_team_size})
+                          </span>
+                          {1 + manualForm.team_members.length < (currentSelectedManualEvent?.max_team_size || 1) && (
+                            <button type="button" onClick={handleManualAddTeammate} className="glass-btn" style={{ fontSize: '0.72rem', padding: '0.3rem 0.65rem' }}>
+                              + Add Teammate
+                            </button>
+                          )}
+                        </div>
+
+                        {manualForm.team_members.map((tm, idx) => (
+                          <div key={idx} style={{ background: 'var(--bg-inset)', padding: '0.65rem 0.85rem', borderRadius: '10px', marginBottom: '0.5rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
+                              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Teammate #{idx + 1}</span>
+                              <button type="button" onClick={() => handleManualRemoveTeammate(idx)} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer' }}>
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.45rem' }}>
+                              <input
+                                type="text"
+                                placeholder="Name"
+                                value={tm.full_name}
+                                onChange={(e) => handleManualTeammateChange(idx, 'full_name', e.target.value)}
+                                className="neu-input"
+                                style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem' }}
+                                required
+                              />
+                              <input
+                                type="email"
+                                placeholder="Email"
+                                value={tm.email}
+                                onChange={(e) => handleManualTeammateChange(idx, 'email', e.target.value)}
+                                className="neu-input"
+                                style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem' }}
+                                required
+                              />
+                              <input
+                                type="tel"
+                                placeholder="Phone"
+                                value={tm.phone}
+                                onChange={(e) => handleManualTeammateChange(idx, 'phone', e.target.value)}
+                                className="neu-input"
+                                style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem' }}
+                                required
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Submit Button */}
+                    <button
+                      type="submit"
+                      disabled={manualSubmitting}
+                      className="neu-btn-gold"
+                      style={{ padding: '0.85rem', fontSize: '0.88rem', marginTop: '0.5rem' }}
+                    >
+                      {manualSubmitting
+                        ? 'Processing Registration...'
+                        : manualPaymentMode === 'OFFLINE'
+                          ? `Confirm Spot Registration (Collect ₹${manualFee.toFixed(0)})`
+                          : 'Generate Online Payment QR'}
+                    </button>
+                  </div>
+                </div>
               </form>
             </div>
           )}
@@ -1240,9 +1843,6 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
             <div>
-              <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--gold-bright)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
-                Admin Master Directory
-              </div>
               <h1 className="font-display gold-text-glow" style={{ fontSize: '2.2rem', fontWeight: '800' }}>
                 Registered Participants
               </h1>
@@ -1271,67 +1871,144 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
               border: '1px solid rgba(212, 175, 55, 0.2)',
               marginBottom: '1.75rem',
               display: 'flex',
-              gap: '1rem',
+              gap: '1.1rem',
               flexWrap: 'wrap',
               alignItems: 'center',
             }}
           >
             {/* Event Filter */}
-            <div style={{ flex: '1 1 200px' }}>
-              <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>Event</label>
+            <div style={{ flex: '1 1 210px' }}>
+              <label style={{ fontSize: '0.72rem', fontWeight: '600', color: 'var(--gold-bright)', display: 'block', marginBottom: '0.35rem', letterSpacing: '0.04em' }}>
+                Event
+              </label>
               <select
                 value={participantFilterEvent}
                 onChange={(e) => setParticipantFilterEvent(e.target.value)}
-                className="neu-input"
-                style={{ padding: '0.5rem', fontSize: '0.82rem' }}
+                style={{
+                  width: '100%',
+                  height: '42px',
+                  background: '#0d0d16',
+                  border: '1px solid rgba(212, 175, 55, 0.35)',
+                  borderRadius: '12px',
+                  padding: '0.55rem 2.2rem 0.55rem 0.85rem',
+                  fontSize: '0.82rem',
+                  fontWeight: '600',
+                  color: 'var(--text-white)',
+                  appearance: 'none',
+                  WebkitAppearance: 'none',
+                  MozAppearance: 'none',
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23D4AF37' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 0.75rem center',
+                  backgroundSize: '15px',
+                  outline: 'none',
+                  boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
+                  cursor: 'pointer',
+                }}
               >
-                <option value="ALL">All Events</option>
+                <option value="ALL" style={{ background: '#0d0d16', color: '#f3f4f6' }}>All Events</option>
                 {allEvents.map((e) => (
-                  <option key={e.id} value={e.id}>{e.title}</option>
+                  <option key={e.id} value={e.id} style={{ background: '#0d0d16', color: '#f3f4f6' }}>{e.title}</option>
                 ))}
               </select>
             </div>
 
             {/* Attendance Status Filter */}
-            <div style={{ flex: '1 1 160px' }}>
-              <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>Check-In Status</label>
+            <div style={{ flex: '1 1 180px' }}>
+              <label style={{ fontSize: '0.72rem', fontWeight: '600', color: 'var(--gold-bright)', display: 'block', marginBottom: '0.35rem', letterSpacing: '0.04em' }}>
+                Check-In Status
+              </label>
               <select
                 value={participantFilterAttendance}
                 onChange={(e) => setParticipantFilterAttendance(e.target.value)}
-                className="neu-input"
-                style={{ padding: '0.5rem', fontSize: '0.82rem' }}
+                style={{
+                  width: '100%',
+                  height: '42px',
+                  background: '#0d0d16',
+                  border: '1px solid rgba(212, 175, 55, 0.35)',
+                  borderRadius: '12px',
+                  padding: '0.55rem 2.2rem 0.55rem 0.85rem',
+                  fontSize: '0.82rem',
+                  fontWeight: '600',
+                  color: 'var(--text-white)',
+                  appearance: 'none',
+                  WebkitAppearance: 'none',
+                  MozAppearance: 'none',
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23D4AF37' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 0.75rem center',
+                  backgroundSize: '15px',
+                  outline: 'none',
+                  boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
+                  cursor: 'pointer',
+                }}
               >
-                <option value="ALL">All (Entered & Not)</option>
-                <option value="PRESENT">Checked In / Present</option>
-                <option value="NOT_ATTENDED">Not Entered</option>
+                <option value="ALL" style={{ background: '#0d0d16', color: '#f3f4f6' }}>All (Active Participants)</option>
+                <option value="PRESENT" style={{ background: '#0d0d16', color: '#f3f4f6' }}>Checked In / Present</option>
+                <option value="NOT_ATTENDED" style={{ background: '#0d0d16', color: '#f3f4f6' }}>Not Entered</option>
+                <option value="HIDDEN" style={{ background: '#0d0d16', color: '#f3f4f6' }}>Hidden</option>
               </select>
             </div>
 
             {/* Payment Mode Filter */}
-            <div style={{ flex: '1 1 160px' }}>
-              <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>Payment Mode</label>
+            <div style={{ flex: '1 1 180px' }}>
+              <label style={{ fontSize: '0.72rem', fontWeight: '600', color: 'var(--gold-bright)', display: 'block', marginBottom: '0.35rem', letterSpacing: '0.04em' }}>
+                Payment Mode
+              </label>
               <select
                 value={participantFilterPaymentMode}
                 onChange={(e) => setParticipantFilterPaymentMode(e.target.value)}
-                className="neu-input"
-                style={{ padding: '0.5rem', fontSize: '0.82rem' }}
+                style={{
+                  width: '100%',
+                  height: '42px',
+                  background: '#0d0d16',
+                  border: '1px solid rgba(212, 175, 55, 0.35)',
+                  borderRadius: '12px',
+                  padding: '0.55rem 2.2rem 0.55rem 0.85rem',
+                  fontSize: '0.82rem',
+                  fontWeight: '600',
+                  color: 'var(--text-white)',
+                  appearance: 'none',
+                  WebkitAppearance: 'none',
+                  MozAppearance: 'none',
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23D4AF37' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 0.75rem center',
+                  backgroundSize: '15px',
+                  outline: 'none',
+                  boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
+                  cursor: 'pointer',
+                }}
               >
-                <option value="ALL">All Payment Modes</option>
-                <option value="OFFLINE">Offline / Cash</option>
-                <option value="ONLINE">Online Gateway</option>
+                <option value="ALL" style={{ background: '#0d0d16', color: '#f3f4f6' }}>All Payment Modes</option>
+                <option value="OFFLINE" style={{ background: '#0d0d16', color: '#f3f4f6' }}>Offline Cash</option>
+                <option value="ONLINE" style={{ background: '#0d0d16', color: '#f3f4f6' }}>Online Gateway</option>
               </select>
             </div>
 
             {/* Search Input */}
             <div style={{ flex: '2 1 240px' }}>
-              <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>Search</label>
+              <label style={{ fontSize: '0.72rem', fontWeight: '600', color: 'var(--gold-bright)', display: 'block', marginBottom: '0.35rem', letterSpacing: '0.04em' }}>
+                Search
+              </label>
               <input
                 type="text"
                 placeholder="Search name, code, phone, team..."
                 value={participantSearch}
                 onChange={(e) => setParticipantSearch(e.target.value)}
-                className="neu-input"
-                style={{ padding: '0.5rem 0.85rem', fontSize: '0.82rem' }}
+                style={{
+                  width: '100%',
+                  height: '42px',
+                  background: '#0d0d16',
+                  border: '1px solid rgba(212, 175, 55, 0.35)',
+                  borderRadius: '12px',
+                  padding: '0.55rem 0.85rem',
+                  fontSize: '0.82rem',
+                  fontWeight: '500',
+                  color: 'var(--text-white)',
+                  outline: 'none',
+                  boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
+                }}
               />
             </div>
           </div>
@@ -1347,6 +2024,7 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {adminRegistrations.map((reg) => {
                 const isPresent = reg.attendance_status === 'PRESENT';
+                const isHidden = reg.attendance_status === 'HIDDEN';
                 return (
                   <div
                     key={reg.id}
@@ -1360,7 +2038,11 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
                       justifyContent: 'space-between',
                       flexWrap: 'wrap',
                       gap: '1rem',
-                      borderLeft: isPresent ? '4px solid #10B981' : '4px solid rgba(212, 175, 55, 0.4)',
+                      borderLeft: isHidden
+                        ? '4px solid #6B7280'
+                        : isPresent
+                        ? '4px solid #10B981'
+                        : '4px solid rgba(212, 175, 55, 0.4)',
                     }}
                   >
                     <div>
@@ -1386,6 +2068,21 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
                         >
                           {reg.payment_mode === 'OFFLINE' ? 'Cash' : 'Online'}
                         </span>
+                        {isHidden && (
+                          <span
+                            style={{
+                              fontSize: '0.7rem',
+                              padding: '0.15rem 0.5rem',
+                              borderRadius: '6px',
+                              background: 'rgba(107, 114, 128, 0.25)',
+                              color: '#9CA3AF',
+                              fontWeight: '700',
+                              border: '1px solid rgba(156, 163, 175, 0.3)',
+                            }}
+                          >
+                            Hidden
+                          </span>
+                        )}
                       </div>
 
                       <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', display: 'flex', gap: '0.85rem', flexWrap: 'wrap' }}>
@@ -1409,20 +2106,72 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
                         <Eye size={14} /> Details
                       </button>
 
-                      <button
-                        onClick={() => handleToggleAttendance(reg)}
-                        disabled={updatingId === reg.id}
-                        className={isPresent ? 'neu-btn' : 'neu-btn-gold'}
-                        style={{
-                          padding: '0.55rem 1.15rem',
-                          fontSize: '0.78rem',
-                          background: isPresent ? 'rgba(16, 185, 129, 0.15)' : undefined,
-                          borderColor: isPresent ? '#10B981' : undefined,
-                          color: isPresent ? '#34D399' : undefined,
-                        }}
-                      >
-                        {isPresent ? 'Entered (Undo)' : 'Check In'}
-                      </button>
+                      {isHidden ? (
+                        <>
+                          <button
+                            onClick={() => handleRestoreParticipant(reg)}
+                            className="neu-btn"
+                            style={{
+                              fontSize: '0.78rem',
+                              padding: '0.5rem 0.85rem',
+                              borderColor: 'rgba(16, 185, 129, 0.4)',
+                              color: '#34D399',
+                              background: 'rgba(16, 185, 129, 0.1)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.35rem',
+                            }}
+                            title="Restore participant to active roster"
+                          >
+                            <RotateCcw size={14} /> Restore
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (!confirm(`Permanently delete participant "${reg.primary_name}" from database? This action cannot be undone.`)) return;
+                              try {
+                                await api.deleteRegistration(reg.id);
+                                toast.success(`Participant "${reg.primary_name}" permanently deleted.`);
+                                fetchAdminRegistrations();
+                              } catch (err) {
+                                toast.error(`Failed to delete participant: ${err.message}`);
+                              }
+                            }}
+                            className="neu-btn"
+                            style={{
+                              fontSize: '0.78rem',
+                              padding: '0.5rem 0.85rem',
+                              borderColor: 'rgba(239, 68, 68, 0.4)',
+                              color: '#F87171',
+                              background: 'rgba(239, 68, 68, 0.12)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.35rem',
+                            }}
+                            title="Permanently remove from database"
+                          >
+                            <Trash2 size={14} /> Delete
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => handleDeleteParticipant(reg)}
+                          className="neu-btn"
+                          style={{
+                            fontSize: '0.78rem',
+                            padding: '0.5rem 0.95rem',
+                            borderColor: 'rgba(239, 68, 68, 0.4)',
+                            color: '#F87171',
+                            background: 'rgba(239, 68, 68, 0.08)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.4rem',
+                            cursor: 'pointer',
+                          }}
+                          title={festSettings.hide_on_delete ? 'Hide participant from roster' : 'Permanently delete participant'}
+                        >
+                          <Trash2 size={14} /> Delete
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -1439,9 +2188,7 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
             <div>
-              <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--gold-bright)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
-                Event Operations
-              </div>
+
               <h1 className="font-display gold-text-glow" style={{ fontSize: '2.2rem', fontWeight: '800' }}>
                 Create & Manage Events
               </h1>
@@ -1817,6 +2564,45 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
                 />
               </div>
 
+              {/* Setting: Hide participants on delete */}
+              <div
+                style={{
+                  background: 'var(--bg-inset)',
+                  padding: '1.15rem 1.35rem',
+                  borderRadius: '14px',
+                  border: '1px solid rgba(212, 175, 55, 0.25)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '1rem',
+                  cursor: 'pointer',
+                  transition: 'border-color 0.2s ease',
+                }}
+                onClick={() => setFestSettings((prev) => ({ ...prev, hide_on_delete: !prev.hide_on_delete }))}
+              >
+                <div>
+                  <div style={{ fontWeight: '700', fontSize: '0.92rem', color: 'var(--text-white)' }}>
+                    Hide participants on delete
+                  </div>
+                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '0.25rem', lineHeight: '1.4' }}>
+                    When enabled, clicking Delete marks participants as <strong>Hidden</strong> rather than deleting them from the database. When disabled, Delete permanently purges the record.
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={festSettings.hide_on_delete ?? true}
+                  onChange={(e) => setFestSettings((prev) => ({ ...prev, hide_on_delete: e.target.checked }))}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    width: '20px',
+                    height: '20px',
+                    cursor: 'pointer',
+                    accentColor: 'var(--gold-bright)',
+                    flexShrink: 0,
+                  }}
+                />
+              </div>
+
               <button type="submit" className="neu-btn-gold" style={{ marginTop: '0.5rem', padding: '0.85rem' }}>
                 Save Settings
               </button>
@@ -2174,10 +2960,15 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '180px', overflowY: 'auto' }}>
                   {inspectRegistration.team_members.map((m, idx) => (
-                    <div key={idx} style={{ background: 'var(--bg-inset)', padding: '0.75rem', borderRadius: '8px', fontSize: '0.8rem' }}>
-                      <div style={{ fontWeight: '700', color: 'var(--text-white)' }}>{m.full_name}</div>
-                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{m.email} • {m.phone}</div>
-                      <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{m.college_name}</div>
+                    <div key={idx} style={{ background: 'var(--bg-inset)', padding: '0.75rem 0.95rem', borderRadius: '10px', fontSize: '0.8rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.2rem' }}>
+                        <div style={{ fontWeight: '700', color: 'var(--text-white)' }}>#{idx + 2} {m.full_name}</div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--gold-light)' }}>📞 {m.phone}</div>
+                      </div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>✉️ {m.email}</div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                        🏫 {m.college_name} {m.department ? `• ${m.department}` : ''} {m.course_and_semester ? `• ${m.course_and_semester}` : ''}
+                      </div>
                     </div>
                   ))}
                 </div>

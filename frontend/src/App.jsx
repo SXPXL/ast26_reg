@@ -37,7 +37,6 @@ function MainApp() {
       {/* Top Navbar */}
       <Navbar
         isVolunteerRoute={isVolunteerRoute}
-        onOpenDrawer={() => setDrawerOpen(true)}
         onNavigate={navigateTo}
       />
 
@@ -46,6 +45,7 @@ function MainApp() {
         <HamburgerDrawer
           isOpen={drawerOpen}
           onClose={() => setDrawerOpen(false)}
+          onToggle={() => setDrawerOpen((prev) => !prev)}
           activeSection={activeSection}
           onSelectSection={setActiveSection}
         />

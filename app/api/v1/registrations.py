@@ -3,11 +3,11 @@ from decimal import Decimal
 from typing import List, Optional
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.dependencies import get_current_user, require_volunteer_or_admin
+from app.core.dependencies import get_current_user, require_admin, require_volunteer_or_admin
 from app.db.session import get_db
 from app.models.event import Event, EventType, EventVolunteer
 from app.models.payment import PaymentOrder, PaymentOrderStatus
@@ -89,16 +89,22 @@ async def create_registration(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Team cannot exceed {event.max_team_size} members (including leader).",
             )
-        if not reg_in.team_name or not reg_in.team_name.strip():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Team name is required for team events.",
-            )
-
     # 3. Create Registration Record
     registration_code = await get_unique_registration_code(db)
     total_amount = event.registration_fee
     is_offline = (reg_in.payment_mode or "").upper() == "OFFLINE"
+
+    assigned_team_name = None
+    if event.event_type == EventType.TEAM.value:
+        if reg_in.team_name and reg_in.team_name.strip():
+            assigned_team_name = reg_in.team_name.strip()
+        else:
+            # Assign team number in order of registration starting from 1
+            count_res = await db.execute(
+                select(func.count(Registration.id)).where(Registration.event_id == event.id)
+            )
+            existing_team_count = count_res.scalar() or 0
+            assigned_team_name = f"Team {existing_team_count + 1}"
 
     # If event is free or paid offline cash, immediately mark as SUCCESS
     initial_payment_status = (
@@ -117,7 +123,7 @@ async def create_registration(
         department=reg_in.department or "General",
         year_of_study=reg_in.year_of_study or "1st Year",
         course_and_semester=reg_in.course_and_semester,
-        team_name=reg_in.team_name.strip() if reg_in.team_name else None,
+        team_name=assigned_team_name,
         total_amount=total_amount,
         payment_mode="OFFLINE" if is_offline else "ONLINE",
         payment_status=initial_payment_status,
@@ -134,6 +140,7 @@ async def create_registration(
             email=member.email.lower(),
             phone=member.phone,
             college_name=member.college_name,
+            department=member.department,
             course_and_semester=member.course_and_semester,
             roll_no=member.roll_no,
         )
@@ -251,6 +258,9 @@ async def list_registrations(
         query = query.where(Registration.payment_mode == payment_mode.upper())
     if attendance_status:
         query = query.where(Registration.attendance_status == attendance_status.value)
+    else:
+        # When all is selected, hidden shouldn't be shown
+        query = query.where(Registration.attendance_status != "HIDDEN")
     if search:
         search_term = f"%{search}%"
         query = query.where(
@@ -369,3 +379,22 @@ async def update_attendance(
     res.event_title = reg.event.title if reg.event else None
     res.marked_by_name = current_user.full_name
     return res
+
+
+@router.delete("/{registration_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_registration(
+    registration_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Permanently delete a registration (Admin only)."""
+    reg = await db.get(Registration, registration_id)
+    if not reg:
+        raise HTTPException(status_code=404, detail="Registration not found.")
+
+    # Delete related team members
+    await db.execute(delete(TeamMember).where(TeamMember.registration_id == registration_id))
+    await db.delete(reg)
+    await db.commit()
+    return None
+

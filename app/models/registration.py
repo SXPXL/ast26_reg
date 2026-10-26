@@ -24,6 +24,7 @@ class PaymentStatus(str, enum.Enum):
 class AttendanceStatus(str, enum.Enum):
     NOT_ATTENDED = "NOT_ATTENDED"
     PRESENT = "PRESENT"
+    HIDDEN = "HIDDEN"
 
 
 class Registration(Base):

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Sparkles } from 'lucide-react';
+import AsthraLogo from './AsthraLogo';
 
 export default function SplashLoader({ isFadingOut }) {
   return (
@@ -48,21 +49,7 @@ export default function SplashLoader({ isFadingOut }) {
         }}
       >
         {/* Logo */}
-        <div
-          style={{
-            width: '64px',
-            height: '64px',
-            borderRadius: '18px',
-            background: 'linear-gradient(135deg, #181824 0%, #0d0d14 100%)',
-            boxShadow: '0 8px 30px rgba(0, 0, 0, 0.8), 0 0 20px rgba(212, 175, 55, 0.25)',
-            border: '1px solid rgba(212, 175, 55, 0.45)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Sparkles size={34} color="#F5D77F" />
-        </div>
+        <AsthraLogo size={80} />
 
         {/* Gold Asthra 26 Text with text-only shine sweep */}
         <div

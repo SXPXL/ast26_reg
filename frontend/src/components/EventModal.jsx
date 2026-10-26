@@ -7,7 +7,6 @@ import {
   MapPin,
   Users,
   CreditCard,
-  Sparkles,
   Plus,
   Trash2,
   X,
@@ -17,10 +16,6 @@ import {
   CheckCircle2,
   ShieldCheck,
   FileText,
-  Building2,
-  GraduationCap,
-  Phone,
-  Mail,
   User,
 } from 'lucide-react';
 
@@ -33,21 +28,22 @@ export default function EventModal({ event, onClose, onRegistered }) {
   const fee = parseFloat(event.registration_fee || 0);
   const hasRules = Boolean(event.rules && event.rules.trim().length > 0);
 
-  // Initial step: If rules exist, show rules popup first; otherwise go straight to form
-  const [step, setStep] = useState(hasRules ? 'rules' : 'form'); // 'rules' | 'form' | 'confirm' | 'ticket'
+  // Steps: 'rules' | 'form' | 'confirm' | 'ticket'
+  const [step, setStep] = useState(hasRules ? 'rules' : 'form');
   const [ticketData, setTicketData] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
-  // Form State
+  // Form State with separate course and semester
   const [formData, setFormData] = useState({
     primary_name: '',
     primary_email: '',
     primary_phone: '',
     college_name: '',
-    course_and_semester: '',
-    team_name: '',
-    team_members: [], // [{ full_name, email, phone, same_as_primary: true, college_name, course_and_semester }]
+    department: '',
+    course: '',
+    semester: '',
+    team_members: [], // [{ full_name, email, phone, college_name, department, course, semester, same_college, same_dept, same_course, same_sem }]
   });
 
   const handleAddTeammate = () => {
@@ -64,9 +60,14 @@ export default function EventModal({ event, onClose, onRegistered }) {
           full_name: '',
           email: '',
           phone: '',
-          same_as_primary: true,
-          college_name: formData.college_name || '',
-          course_and_semester: formData.course_and_semester || '',
+          college_name: formData.college_name,
+          department: formData.department,
+          course: formData.course,
+          semester: formData.semester,
+          same_college: true,
+          same_dept: true,
+          same_course: true,
+          same_sem: true,
         },
       ],
     });
@@ -84,70 +85,70 @@ export default function EventModal({ event, onClose, onRegistered }) {
     setFormData({ ...formData, team_members: updated });
   };
 
-  const handleTeammateSameAsPrimaryToggle = (index, checked) => {
+  const handleToggleSame = (index, flagKey, targetField, primaryValue) => {
     const updated = [...formData.team_members];
-    updated[index].same_as_primary = checked;
-    if (checked) {
-      updated[index].college_name = formData.college_name;
-      updated[index].course_and_semester = formData.course_and_semester;
+    const newFlag = !updated[index][flagKey];
+    updated[index][flagKey] = newFlag;
+    if (newFlag) {
+      updated[index][targetField] = primaryValue;
     }
     setFormData({ ...formData, team_members: updated });
   };
 
-  // Form validation before proceeding to Confirmation Modal
+  // Validation before opening Confirmation Modal
   const handleProceedToConfirm = (e) => {
     e.preventDefault();
     setError(null);
 
-    // Validate phone
     const phoneClean = formData.primary_phone.replace(/\D/g, '');
     if (phoneClean.length < 10) {
-      setError('Please enter a valid 10-digit phone number.');
+      setError('Please enter a valid 10-digit mobile number.');
       return;
     }
 
     if (isTeam) {
       const totalMembers = 1 + formData.team_members.length;
       if (totalMembers < (event.min_team_size || 1)) {
-        setError(`This event requires at least ${event.min_team_size} members in the team.`);
+        setError(`This team event requires at least ${event.min_team_size} members.`);
         return;
       }
-      if (!formData.team_name.trim()) {
-        setError('Please enter a team name.');
-        return;
-      }
-      // Validate each teammate
       for (let i = 0; i < formData.team_members.length; i++) {
         const tm = formData.team_members[i];
         if (!tm.full_name.trim() || !tm.email.trim() || !tm.phone.trim()) {
-          setError(`Please fill in all required details for Teammate #${i + 1}.`);
+          setError(`Please fill in required contact details for Teammate #${i + 1}.`);
           return;
         }
       }
     }
 
-    // Advance to confirmation review step
     setStep('confirm');
   };
 
-  // Final confirmation: Submit to backend & verify payment
+  // Submit to backend & verify payment
   const handleFinalSubmit = async () => {
     try {
       setSubmitting(true);
       setError(null);
 
-      // Prepare team members payload
       const formattedTeammates = isTeam
-        ? formData.team_members.map((m) => ({
-            full_name: m.full_name.trim(),
-            email: m.email.trim(),
-            phone: m.phone.trim(),
-            college_name: m.same_as_primary ? formData.college_name.trim() : (m.college_name || formData.college_name).trim(),
-            course_and_semester: m.same_as_primary
-              ? formData.course_and_semester.trim()
-              : (m.course_and_semester || formData.course_and_semester).trim(),
-          }))
+        ? formData.team_members.map((m) => {
+            const college = m.same_college ? formData.college_name : (m.college_name || formData.college_name);
+            const dept = m.same_dept ? formData.department : (m.department || formData.department);
+            const crs = m.same_course ? formData.course : (m.course || formData.course);
+            const sem = m.same_sem ? formData.semester : (m.semester || formData.semester);
+
+            return {
+              full_name: m.full_name.trim(),
+              email: m.email.trim(),
+              phone: m.phone.trim(),
+              college_name: college.trim(),
+              department: dept.trim(),
+              course_and_semester: `${crs.trim()}, ${sem.trim()}`.replace(/^,\s*|,\s*$/g, ''),
+            };
+          })
         : [];
+
+      const primaryCourseSem = `${formData.course.trim()}, ${formData.semester.trim()}`.replace(/^,\s*|,\s*$/g, '');
 
       const payload = {
         event_id: event.id,
@@ -155,17 +156,16 @@ export default function EventModal({ event, onClose, onRegistered }) {
         primary_email: formData.primary_email.trim(),
         primary_phone: formData.primary_phone.trim(),
         college_name: formData.college_name.trim(),
-        course_and_semester: formData.course_and_semester.trim(),
-        department: formData.course_and_semester.trim() || 'General',
-        year_of_study: '1st Year',
-        team_name: isTeam ? formData.team_name.trim() : null,
+        department: formData.department.trim() || 'General',
+        course_and_semester: primaryCourseSem,
+        year_of_study: formData.semester.trim() || '1st Year',
         team_members: formattedTeammates,
         payment_mode: 'ONLINE',
       };
 
       const result = await api.createRegistration(payload);
 
-      // Verify payment order if Cashfree session generated
+      // Verify payment order if active
       if (result.payment_status === 'PENDING' && result.payment_session) {
         try {
           const verifyRes = await api.verifyPayment(result.payment_session.order_id);
@@ -173,11 +173,11 @@ export default function EventModal({ event, onClose, onRegistered }) {
             result.payment_status = 'SUCCESS';
           }
         } catch (vErr) {
-          console.log('Payment verification check:', vErr);
+          console.log('Payment check:', vErr);
         }
       }
 
-      // Fetch the generated digital ticket pass
+      // Fetch confirmed digital ticket pass
       const fullTicket = await api.getRegistrationByCode(result.registration_code);
       setTicketData(fullTicket);
       setStep('ticket');
@@ -185,21 +185,12 @@ export default function EventModal({ event, onClose, onRegistered }) {
       if (onRegistered) onRegistered();
     } catch (err) {
       console.error(err);
-      setError(err.message || 'Registration failed. Please review your details and try again.');
+      setError(err.message || 'Registration failed. Please check inputs.');
       toastError(err.message || 'Registration failed');
     } finally {
       setSubmitting(false);
     }
   };
-
-  // Format date/time
-  let formattedTime = '';
-  try {
-    const d = new Date(event.event_date);
-    formattedTime = `${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })} • ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
-  } catch {
-    formattedTime = event.event_date;
-  }
 
   return (
     <div
@@ -226,7 +217,7 @@ export default function EventModal({ event, onClose, onRegistered }) {
           borderRadius: '24px',
           border: '1px solid var(--glass-border)',
           boxShadow: '0 25px 60px rgba(0, 0, 0, 0.85), 0 0 35px rgba(212, 175, 55, 0.15)',
-          maxWidth: step === 'ticket' ? '680px' : '640px',
+          maxWidth: step === 'ticket' ? '680px' : '650px',
           width: '100%',
           maxHeight: '92vh',
           overflowY: 'auto',
@@ -234,74 +225,56 @@ export default function EventModal({ event, onClose, onRegistered }) {
           position: 'relative',
         }}
       >
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          aria-label="Close modal"
-          style={{
-            position: 'absolute',
-            top: '1.25rem',
-            right: '1.25rem',
-            background: 'var(--bg-inset)',
-            border: 'none',
-            color: 'var(--text-muted)',
-            width: '34px',
-            height: '34px',
-            borderRadius: '50%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            transition: 'color 0.2s, background 0.2s',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.color = '#EF4444';
-            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.color = 'var(--text-muted)';
-            e.currentTarget.style.background = 'var(--bg-inset)';
-          }}
-        >
-          <X size={18} />
-        </button>
+        {/* Requirement 7: In the confirmation modal, remove the close option in the top right */}
+        {step !== 'confirm' && (
+          <button
+            onClick={onClose}
+            aria-label="Close modal"
+            style={{
+              position: 'absolute',
+              top: '1.25rem',
+              right: '1.25rem',
+              background: 'var(--bg-inset)',
+              border: 'none',
+              color: 'var(--text-muted)',
+              width: '34px',
+              height: '34px',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = '#EF4444';
+              e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = 'var(--text-muted)';
+              e.currentTarget.style.background = 'var(--bg-inset)';
+            }}
+          >
+            <X size={18} />
+          </button>
+        )}
 
         {/* ======================================================== */}
         {/* STEP 1: RULES POPUP (Shown if rules added by admin)     */}
         {/* ======================================================== */}
         {step === 'rules' && (
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.6rem' }}>
-              <div
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.35rem',
-                  fontSize: '0.72rem',
-                  fontWeight: '700',
-                  letterSpacing: '0.15em',
-                  textTransform: 'uppercase',
-                  color: 'var(--gold-bright)',
-                }}
-              >
-                <ShieldCheck size={14} color="#D4AF37" />
-                <span>Rules & Guidelines</span>
-              </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem' }}>
+              <ShieldCheck size={15} color="#D4AF37" />
+              <span style={{ fontSize: '0.72rem', fontWeight: '700', letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--gold-bright)' }}>
+                Rules & Guidelines
+              </span>
             </div>
 
-            <h2
-              className="font-display gold-text-glow"
-              style={{
-                fontSize: '1.85rem',
-                fontWeight: '800',
-                lineHeight: 1.2,
-                marginBottom: '0.85rem',
-              }}
-            >
+            <h2 className="font-display gold-text-glow" style={{ fontSize: '1.85rem', fontWeight: '800', lineHeight: 1.2, marginBottom: '0.85rem' }}>
               {event.title}
             </h2>
 
-            {/* Quick Meta */}
             <div
               style={{
                 display: 'flex',
@@ -336,7 +309,6 @@ export default function EventModal({ event, onClose, onRegistered }) {
               )}
             </div>
 
-            {/* Rules Content Box */}
             <div
               style={{
                 background: 'rgba(212, 175, 55, 0.05)',
@@ -348,47 +320,19 @@ export default function EventModal({ event, onClose, onRegistered }) {
                 overflowY: 'auto',
               }}
             >
-              <div
-                style={{
-                  fontSize: '0.75rem',
-                  color: 'var(--gold-bright)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.1em',
-                  fontWeight: '700',
-                  marginBottom: '0.65rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.4rem',
-                }}
-              >
+              <div style={{ fontSize: '0.75rem', color: 'var(--gold-bright)', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: '700', marginBottom: '0.65rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                 <FileText size={14} /> Please Read & Agree to Event Rules
               </div>
-              <p
-                style={{
-                  color: 'var(--text-offwhite)',
-                  fontSize: '0.9rem',
-                  lineHeight: 1.65,
-                  whiteSpace: 'pre-line',
-                }}
-              >
+              <p style={{ color: 'var(--text-offwhite)', fontSize: '0.9rem', lineHeight: 1.65, whiteSpace: 'pre-line' }}>
                 {event.rules}
               </p>
             </div>
 
-            {/* Agree & Proceed Button */}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
-              <button
-                onClick={onClose}
-                className="glass-btn"
-                style={{ padding: '0.75rem 1.4rem', fontSize: '0.85rem' }}
-              >
+              <button onClick={onClose} className="glass-btn" style={{ padding: '0.75rem 1.4rem', fontSize: '0.85rem' }}>
                 Cancel
               </button>
-              <button
-                onClick={() => setStep('form')}
-                className="neu-btn-gold"
-                style={{ padding: '0.85rem 1.85rem', fontSize: '0.88rem' }}
-              >
+              <button onClick={() => setStep('form')} className="neu-btn-gold" style={{ padding: '0.85rem 1.85rem', fontSize: '0.88rem' }}>
                 <span>I Agree & Proceed</span>
                 <ChevronRight size={16} />
               </button>
@@ -421,11 +365,9 @@ export default function EventModal({ event, onClose, onRegistered }) {
               </button>
             )}
 
+            {/* Requirement 4: Removed "Participant Registration" text */}
             <div style={{ marginBottom: '1.25rem' }}>
-              <div style={{ fontSize: '0.72rem', color: 'var(--gold-bright)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
-                Participant Registration
-              </div>
-              <h2 className="font-display gold-text-glow" style={{ fontSize: '1.75rem', fontWeight: '800', marginTop: '0.2rem' }}>
+              <h2 className="font-display gold-text-glow" style={{ fontSize: '1.75rem', fontWeight: '800' }}>
                 {event.title}
               </h2>
               <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
@@ -455,28 +397,11 @@ export default function EventModal({ event, onClose, onRegistered }) {
             )}
 
             <form onSubmit={handleProceedToConfirm} style={{ display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
-              {/* Group Event: Team Name */}
-              {isTeam && (
-                <div style={{ background: 'rgba(212, 175, 55, 0.05)', padding: '1rem 1.25rem', borderRadius: '14px', border: '1px solid rgba(212, 175, 55, 0.2)' }}>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: 'var(--gold-bright)', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                    Team Name *
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Enter your official team name"
-                    value={formData.team_name}
-                    onChange={(e) => setFormData({ ...formData, team_name: e.target.value })}
-                    className="neu-input"
-                    required
-                  />
-                </div>
-              )}
-
               {/* Primary Participant Section */}
               <div>
                 <div style={{ fontSize: '0.78rem', fontWeight: '700', color: 'var(--text-white)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                   <User size={15} color="#D4AF37" />
-                  <span>{isTeam ? 'Team Leader / Primary Participant' : 'Participant Details'}</span>
+                  <span>{isTeam ? 'Participant #1 (Team Lead)' : 'Participant Details'}</span>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.85rem', marginBottom: '0.85rem' }}>
@@ -539,22 +464,53 @@ export default function EventModal({ event, onClose, onRegistered }) {
                   </div>
                 </div>
 
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.73rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>
-                    Course and Semester *
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. B.Tech Computer Science, Semester 6"
-                    value={formData.course_and_semester}
-                    onChange={(e) => setFormData({ ...formData, course_and_semester: e.target.value })}
-                    className="neu-input"
-                    required
-                  />
+                {/* Requirement 5: Department, Course and Semester as separate fields */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '0.85rem' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.73rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>
+                      Department *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Computer Science"
+                      value={formData.department}
+                      onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                      className="neu-input"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.73rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>
+                      Course *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. B.Tech"
+                      value={formData.course}
+                      onChange={(e) => setFormData({ ...formData, course: e.target.value })}
+                      className="neu-input"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.73rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>
+                      Semester *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Semester 6"
+                      value={formData.semester}
+                      onChange={(e) => setFormData({ ...formData, semester: e.target.value })}
+                      className="neu-input"
+                      required
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* Group Event: Teammates Section */}
+              {/* Requirement 6: Team events teammates (Team name removed!) */}
               {isTeam && (
                 <div style={{ marginTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '1.25rem' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
@@ -585,14 +541,14 @@ export default function EventModal({ event, onClose, onRegistered }) {
                       key={index}
                       style={{
                         background: 'var(--bg-inset)',
-                        padding: '1.15rem',
-                        borderRadius: '14px',
-                        border: '1px solid rgba(255, 255, 255, 0.05)',
-                        marginBottom: '0.85rem',
+                        padding: '1.25rem',
+                        borderRadius: '16px',
+                        border: '1px solid rgba(255, 255, 255, 0.06)',
+                        marginBottom: '1rem',
                       }}
                     >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                        <span style={{ fontSize: '0.78rem', fontWeight: '700', color: 'var(--gold-light)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
+                        <span style={{ fontSize: '0.82rem', fontWeight: '700', color: 'var(--gold-light)' }}>
                           Teammate #{index + 1}
                         </span>
                         <button
@@ -603,7 +559,7 @@ export default function EventModal({ event, onClose, onRegistered }) {
                             border: 'none',
                             color: '#EF4444',
                             cursor: 'pointer',
-                            padding: '2px',
+                            padding: '3px',
                             display: 'flex',
                             alignItems: 'center',
                           }}
@@ -613,10 +569,11 @@ export default function EventModal({ event, onClose, onRegistered }) {
                         </button>
                       </div>
 
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                      {/* Teammate Contact Fields */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem', marginBottom: '0.85rem' }}>
                         <input
                           type="text"
-                          placeholder="Teammate Name *"
+                          placeholder="Teammate Full Name *"
                           value={member.full_name}
                           onChange={(e) => handleTeammateChange(index, 'full_name', e.target.value)}
                           className="neu-input"
@@ -640,54 +597,118 @@ export default function EventModal({ event, onClose, onRegistered }) {
                         />
                       </div>
 
-                      {/* Same College / Course Checkbox */}
-                      <label
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.55rem',
-                          cursor: 'pointer',
-                          fontSize: '0.78rem',
-                          color: 'var(--text-secondary)',
-                          userSelect: 'none',
-                        }}
-                      >
+                      {/* Requirement 5: "Same as above" checkbox for College */}
+                      <div style={{ marginBottom: '0.75rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>College</span>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.72rem', color: 'var(--gold-bright)', cursor: 'pointer' }}>
+                            <input
+                              type="checkbox"
+                              checked={member.same_college}
+                              onChange={() => handleToggleSame(index, 'same_college', 'college_name', formData.college_name)}
+                              style={{ accentColor: 'var(--gold-bright)' }}
+                            />
+                            <span>Same as above</span>
+                          </label>
+                        </div>
                         <input
-                          type="checkbox"
-                          checked={member.same_as_primary}
-                          onChange={(e) => handleTeammateSameAsPrimaryToggle(index, e.target.checked)}
-                          style={{ accentColor: 'var(--gold-bright)', width: '15px', height: '15px' }}
+                          type="text"
+                          placeholder="Teammate College"
+                          value={member.same_college ? formData.college_name : member.college_name}
+                          onChange={(e) => handleTeammateChange(index, 'college_name', e.target.value)}
+                          disabled={member.same_college}
+                          className="neu-input"
+                          style={{ opacity: member.same_college ? 0.75 : 1 }}
+                          required
                         />
-                        <span>Same College, Course & Semester as primary participant</span>
-                      </label>
+                      </div>
 
-                      {/* If unchecked, show custom college and course */}
-                      {!member.same_as_primary && (
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginTop: '0.75rem' }}>
+                      {/* Requirement 5: "Same as above" checkbox for Department, Course & Semester */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.75rem' }}>
+                        {/* Department */}
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Department</span>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.72rem', color: 'var(--gold-bright)', cursor: 'pointer' }}>
+                              <input
+                                type="checkbox"
+                                checked={member.same_dept}
+                                onChange={() => handleToggleSame(index, 'same_dept', 'department', formData.department)}
+                                style={{ accentColor: 'var(--gold-bright)' }}
+                              />
+                              <span>Same as above</span>
+                            </label>
+                          </div>
                           <input
                             type="text"
-                            placeholder="Teammate College *"
-                            value={member.college_name || ''}
-                            onChange={(e) => handleTeammateChange(index, 'college_name', e.target.value)}
+                            placeholder="Department"
+                            value={member.same_dept ? formData.department : member.department}
+                            onChange={(e) => handleTeammateChange(index, 'department', e.target.value)}
+                            disabled={member.same_dept}
                             className="neu-input"
-                            required
-                          />
-                          <input
-                            type="text"
-                            placeholder="Course & Semester *"
-                            value={member.course_and_semester || ''}
-                            onChange={(e) => handleTeammateChange(index, 'course_and_semester', e.target.value)}
-                            className="neu-input"
+                            style={{ opacity: member.same_dept ? 0.75 : 1 }}
                             required
                           />
                         </div>
-                      )}
+
+                        {/* Course */}
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Course</span>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.72rem', color: 'var(--gold-bright)', cursor: 'pointer' }}>
+                              <input
+                                type="checkbox"
+                                checked={member.same_course}
+                                onChange={() => handleToggleSame(index, 'same_course', 'course', formData.course)}
+                                style={{ accentColor: 'var(--gold-bright)' }}
+                              />
+                              <span>Same as above</span>
+                            </label>
+                          </div>
+                          <input
+                            type="text"
+                            placeholder="Course"
+                            value={member.same_course ? formData.course : member.course}
+                            onChange={(e) => handleTeammateChange(index, 'course', e.target.value)}
+                            disabled={member.same_course}
+                            className="neu-input"
+                            style={{ opacity: member.same_course ? 0.75 : 1 }}
+                            required
+                          />
+                        </div>
+
+                        {/* Semester */}
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Semester</span>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.72rem', color: 'var(--gold-bright)', cursor: 'pointer' }}>
+                              <input
+                                type="checkbox"
+                                checked={member.same_sem}
+                                onChange={() => handleToggleSame(index, 'same_sem', 'semester', formData.semester)}
+                                style={{ accentColor: 'var(--gold-bright)' }}
+                              />
+                              <span>Same as above</span>
+                            </label>
+                          </div>
+                          <input
+                            type="text"
+                            placeholder="Semester"
+                            value={member.same_sem ? formData.semester : member.semester}
+                            onChange={(e) => handleTeammateChange(index, 'semester', e.target.value)}
+                            disabled={member.same_sem}
+                            className="neu-input"
+                            style={{ opacity: member.same_sem ? 0.75 : 1 }}
+                            required
+                          />
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
               )}
 
-              {/* Submit / Proceed to Review Button */}
+              {/* Review & Proceed Button */}
               <div
                 style={{
                   display: 'flex',
@@ -701,7 +722,7 @@ export default function EventModal({ event, onClose, onRegistered }) {
                 }}
               >
                 <div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Total Event Fee</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Registration Fee (Per Event)</div>
                   <div className="font-mono" style={{ fontSize: '1.3rem', fontWeight: '800', color: 'var(--gold-bright)' }}>
                     {fee > 0 ? `₹${fee.toFixed(0)}` : 'Free Entry'}
                   </div>
@@ -721,27 +742,36 @@ export default function EventModal({ event, onClose, onRegistered }) {
         )}
 
         {/* ======================================================== */}
-        {/* STEP 3: CONFIRMATION MODAL (Double check before pay)    */}
+        {/* STEP 3: CONFIRMATION MODAL                               */}
+        {/* Requirement 7: No close X on top-right, only back arrow */}
+        {/* Requirement 8: All teammate details shown                */}
         {/* ======================================================== */}
         {step === 'confirm' && (
           <div>
-            <button
-              onClick={() => setStep('form')}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'var(--gold-bright)',
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.35rem',
-                fontSize: '0.8rem',
-                marginBottom: '1rem',
-                padding: 0,
-              }}
-            >
-              <ArrowLeft size={15} /> Edit Details
-            </button>
+            {/* Requirement 7: Only back arrow in top left, no text */}
+            <div style={{ marginBottom: '1rem' }}>
+              <button
+                onClick={() => setStep('form')}
+                aria-label="Back to form"
+                style={{
+                  background: 'var(--bg-inset)',
+                  border: '1px solid rgba(212, 175, 55, 0.25)',
+                  borderRadius: '50%',
+                  width: '36px',
+                  height: '36px',
+                  color: 'var(--gold-bright)',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--gold-bright)')}
+                onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.25)')}
+              >
+                <ArrowLeft size={18} />
+              </button>
+            </div>
 
             <h2 className="font-display gold-text-glow" style={{ fontSize: '1.75rem', fontWeight: '800', marginBottom: '0.35rem' }}>
               Confirm Your Details
@@ -774,80 +804,103 @@ export default function EventModal({ event, onClose, onRegistered }) {
             <div
               style={{
                 background: 'var(--bg-inset)',
-                borderRadius: '16px',
+                borderRadius: '18px',
                 border: '1px solid rgba(212, 175, 55, 0.25)',
                 padding: '1.5rem',
                 marginBottom: '1.5rem',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '1rem',
+                gap: '1.15rem',
               }}
             >
-              {/* Event info */}
+              {/* Event Title */}
               <div style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '0.75rem' }}>
                 <div style={{ fontSize: '0.72rem', color: 'var(--gold-bright)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
                   Event
                 </div>
-                <div style={{ fontSize: '1.15rem', fontWeight: '700', color: 'var(--text-white)' }}>
+                <div style={{ fontSize: '1.2rem', fontWeight: '800', color: 'var(--text-white)' }}>
                   {event.title}
                 </div>
-                {isTeam && formData.team_name && (
-                  <div style={{ fontSize: '0.85rem', color: 'var(--gold-light)', marginTop: '0.2rem' }}>
-                    Team: <strong>{formData.team_name}</strong>
+              </div>
+
+              {/* Primary Participant Full Details */}
+              <div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--gold-bright)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.5rem' }}>
+                  {isTeam ? 'Team Leader Details' : 'Participant Details'}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
+                  <div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Name</div>
+                    <div style={{ fontSize: '0.92rem', fontWeight: '600', color: 'var(--text-white)' }}>{formData.primary_name}</div>
                   </div>
-                )}
-              </div>
-
-              {/* Primary details */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.85rem' }}>
-                <div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Participant Name</div>
-                  <div style={{ fontSize: '0.95rem', fontWeight: '600', color: 'var(--text-white)' }}>{formData.primary_name}</div>
-                </div>
-
-                <div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Email</div>
-                  <div style={{ fontSize: '0.9rem', color: 'var(--text-offwhite)' }}>{formData.primary_email}</div>
-                </div>
-
-                <div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Phone</div>
-                  <div style={{ fontSize: '0.9rem', color: 'var(--text-offwhite)' }}>{formData.primary_phone}</div>
-                </div>
-
-                <div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>College</div>
-                  <div style={{ fontSize: '0.9rem', color: 'var(--text-offwhite)' }}>{formData.college_name}</div>
-                </div>
-
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Course and Semester</div>
-                  <div style={{ fontSize: '0.9rem', color: 'var(--text-offwhite)' }}>{formData.course_and_semester}</div>
+                  <div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Email</div>
+                    <div style={{ fontSize: '0.88rem', color: 'var(--text-offwhite)' }}>{formData.primary_email}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Phone</div>
+                    <div style={{ fontSize: '0.88rem', color: 'var(--text-offwhite)' }}>{formData.primary_phone}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>College</div>
+                    <div style={{ fontSize: '0.88rem', color: 'var(--text-offwhite)' }}>{formData.college_name}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Department</div>
+                    <div style={{ fontSize: '0.88rem', color: 'var(--text-offwhite)' }}>{formData.department}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Course & Semester</div>
+                    <div style={{ fontSize: '0.88rem', color: 'var(--text-offwhite)' }}>{formData.course}, {formData.semester}</div>
+                  </div>
                 </div>
               </div>
 
-              {/* Teammates list if group */}
+              {/* Requirement 8: All details of teammates shown */}
               {isTeam && formData.team_members.length > 0 && (
-                <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.75rem' }}>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--gold-bright)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.5rem' }}>
+                <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.85rem' }}>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--gold-bright)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.65rem' }}>
                     Teammates ({formData.team_members.length})
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
-                    {formData.team_members.map((tm, idx) => (
-                      <div key={idx} style={{ fontSize: '0.82rem', color: 'var(--text-offwhite)', display: 'flex', justifyContent: 'space-between', background: 'rgba(255,255,255,0.02)', padding: '0.45rem 0.75rem', borderRadius: '8px' }}>
-                        <span>
-                          <strong>{tm.full_name}</strong> ({tm.phone})
-                        </span>
-                        <span style={{ color: 'var(--text-muted)' }}>
-                          {tm.same_as_primary ? formData.college_name : tm.college_name}
-                        </span>
-                      </div>
-                    ))}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {formData.team_members.map((tm, idx) => {
+                      const college = tm.same_college ? formData.college_name : tm.college_name;
+                      const dept = tm.same_dept ? formData.department : tm.department;
+                      const crs = tm.same_course ? formData.course : tm.course;
+                      const sem = tm.same_sem ? formData.semester : tm.semester;
+
+                      return (
+                        <div
+                          key={idx}
+                          style={{
+                            background: 'rgba(255,255,255,0.02)',
+                            border: '1px solid rgba(255,255,255,0.05)',
+                            padding: '0.85rem 1rem',
+                            borderRadius: '12px',
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+                            <span style={{ fontWeight: '700', color: 'var(--text-white)', fontSize: '0.9rem' }}>
+                              #{idx + 2} {tm.full_name}
+                            </span>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                              📞 {tm.phone}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.4rem' }}>
+                            <div>✉️ {tm.email}</div>
+                            <div>🏫 {college}</div>
+                            <div>🏢 {dept}</div>
+                            <div>📚 {crs}, {sem}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
 
-              {/* Total Fee Banner */}
+              {/* Fee Summary */}
               <div
                 style={{
                   borderTop: '1px solid rgba(212, 175, 55, 0.2)',
@@ -870,21 +923,12 @@ export default function EventModal({ event, onClose, onRegistered }) {
             </div>
 
             {/* Actions */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
-              <button
-                onClick={() => setStep('form')}
-                className="glass-btn"
-                style={{ padding: '0.85rem 1.5rem', fontSize: '0.85rem' }}
-                disabled={submitting}
-              >
-                ← Edit Details
-              </button>
-
+            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '1rem' }}>
               <button
                 onClick={handleFinalSubmit}
                 disabled={submitting}
                 className="neu-btn-gold"
-                style={{ padding: '0.85rem 2.25rem', fontSize: '0.9rem' }}
+                style={{ padding: '0.85rem 2.5rem', fontSize: '0.9rem' }}
               >
                 {submitting ? (
                   <span>Processing Payment...</span>
@@ -925,7 +969,7 @@ export default function EventModal({ event, onClose, onRegistered }) {
                 Registration Confirmed!
               </h2>
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem' }}>
-                Your entry pass has been generated. Save or print this ticket for entry.
+                Your pass has been generated. Save or print this ticket for entry.
               </p>
             </div>
 

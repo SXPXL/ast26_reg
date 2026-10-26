@@ -1,6 +1,8 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
+import AsthraLogo from './AsthraLogo';
 import {
+  Menu,
   X,
   ClipboardList,
   UserPlus,
@@ -10,12 +12,11 @@ import {
   BarChart3,
   Settings,
   LogOut,
-  Sparkles,
 } from 'lucide-react';
 
-export default function HamburgerDrawer({ isOpen, onClose, activeSection, onSelectSection }) {
+export default function HamburgerDrawer({ isOpen, onClose, onToggle, activeSection, onSelectSection }) {
   const { user, logout } = useAuth();
-  if (!isOpen) return null;
+  if (!user) return null;
 
   const isAdmin = user && (user.role === 'ADMIN' || user.id === '00000000-0000-0000-0000-000000000001');
 
@@ -74,103 +75,167 @@ export default function HamburgerDrawer({ isOpen, onClose, activeSection, onSele
   const visibleItems = menuItems.filter((item) => !item.adminOnly || isAdmin);
 
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(3, 3, 5, 0.75)',
-        backdropFilter: 'blur(8px)',
-        zIndex: 200,
-        display: 'flex',
-        animation: 'fadeIn 0.2s ease-out',
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
+    <>
+      {/* Background Dim Backdrop when expanded */}
+      {isOpen && (
+        <div
+          onClick={onClose}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(3, 3, 5, 0.6)',
+            backdropFilter: 'blur(4px)',
+            WebkitBackdropFilter: 'blur(4px)',
+            zIndex: 140,
+            animation: 'fadeIn 0.2s ease-out',
+          }}
+        />
+      )}
+
+      {/* Collapsible Sidebar Rail */}
+      <aside
         style={{
-          width: '320px',
-          height: '100%',
-          background: 'rgba(13, 13, 20, 0.85)',
-          backdropFilter: 'var(--glass-blur-lg)',
-          WebkitBackdropFilter: 'var(--glass-blur-lg)',
+          position: 'fixed',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: isOpen ? '285px' : '64px',
+          background: 'rgba(11, 11, 18, 0.95)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
           borderRight: '1px solid var(--glass-border)',
-          boxShadow: '10px 0 35px rgba(0, 0, 0, 0.7), inset -1px 0 0 rgba(255, 255, 255, 0.05)',
-          padding: '2rem 1.5rem',
+          boxShadow: isOpen
+            ? '12px 0 40px rgba(0, 0, 0, 0.75), inset -1px 0 0 rgba(255, 255, 255, 0.05)'
+            : '4px 0 20px rgba(0, 0, 0, 0.4)',
+          zIndex: 150,
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between',
+          transition: 'width 0.28s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.28s ease',
+          overflowX: 'hidden',
+          overflowY: 'auto',
         }}
       >
         <div>
-          {/* Header */}
+          {/* Top Header */}
           <div
             style={{
+              height: '70px',
+              padding: isOpen ? '0 1.25rem' : '0',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: '2rem',
-              paddingBottom: '1rem',
+              justifyContent: isOpen ? 'space-between' : 'center',
               borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-              <Sparkles size={18} color="#F5D77F" />
-              <div
-                className="font-display gold-text-glow"
-                style={{ fontSize: '1.25rem', fontWeight: '800' }}
-              >
-                Asthra 26
+            {/* When open: Logo & Asthra 26 title on left */}
+            {isOpen && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', overflow: 'hidden' }}>
+                <AsthraLogo size={28} />
+                <div
+                  className="font-display gold-text-glow"
+                  style={{
+                    fontSize: '1.2rem',
+                    fontWeight: '800',
+                    letterSpacing: '0.05em',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  Asthra 26
+                </div>
               </div>
-            </div>
+            )}
 
+            {/* Hamburger Button:
+                - When closed: placed centered in the 64px rail (far left)
+                - When open: present on the top right of the sidebar, clicking slides it back
+            */}
             <button
-              onClick={onClose}
+              onClick={onToggle || (isOpen ? onClose : () => {})}
+              aria-label={isOpen ? 'Collapse Sidebar' : 'Expand Sidebar'}
+              title={isOpen ? 'Collapse Sidebar' : 'Expand Sidebar'}
               style={{
-                background: 'var(--bg-inset)',
-                border: 'none',
-                color: 'var(--text-muted)',
-                width: '32px',
-                height: '32px',
-                borderRadius: '8px',
+                background: 'rgba(212, 175, 55, 0.08)',
+                border: '1px solid rgba(212, 175, 55, 0.25)',
+                borderRadius: '10px',
+                width: '38px',
+                height: '38px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: 'pointer',
+                color: 'var(--gold-bright)',
+                boxShadow: 'var(--neu-shadow-flat)',
+                transition: 'all 0.2s ease',
+                flexShrink: 0,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = 'var(--gold-bright)';
+                e.currentTarget.style.boxShadow = '0 0 12px rgba(212, 175, 55, 0.25)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.25)';
+                e.currentTarget.style.boxShadow = 'var(--neu-shadow-flat)';
               }}
             >
-              <X size={18} />
+              <Menu size={20} />
             </button>
           </div>
 
-          {/* User info mini-card */}
-          {user && (
-            <div
-              style={{
-                background: 'var(--bg-inset)',
-                border: '1px solid rgba(212, 175, 55, 0.15)',
-                borderRadius: '12px',
-                padding: '0.85rem 1rem',
-                marginBottom: '1.5rem',
-              }}
-            >
-              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                Signed in as
-              </div>
-              <div style={{ fontSize: '0.95rem', fontWeight: '700', color: 'var(--text-white)' }}>
-                {user.full_name}
-              </div>
-              <div style={{ fontSize: '0.72rem', color: 'var(--gold-bright)', marginTop: '0.15rem' }}>
-                {user.role} {isAdmin && '• Full Admin Access'}
-              </div>
-            </div>
-          )}
-
-          {/* Menu navigation options */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+          {/* Navigation Items */}
+          <div
+            style={{
+              padding: isOpen ? '1.25rem 0.85rem' : '1rem 0',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: isOpen ? 'stretch' : 'center',
+              gap: '0.55rem',
+            }}
+          >
             {visibleItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeSection === item.id;
+
+              if (!isOpen) {
+                // Closed state: Icon-only vertically under hamburger menu
+                return (
+                  <button
+                    key={item.id}
+                    title={item.label}
+                    onClick={() => onSelectSection(item.id)}
+                    style={{
+                      width: '42px',
+                      height: '42px',
+                      borderRadius: '12px',
+                      background: isActive ? 'rgba(212, 175, 55, 0.18)' : 'transparent',
+                      border: isActive ? '1px solid var(--gold-bright)' : '1px solid transparent',
+                      color: isActive ? 'var(--gold-bright)' : 'var(--text-secondary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      boxShadow: isActive ? '0 0 12px rgba(212, 175, 55, 0.25)' : 'none',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isActive) {
+                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)';
+                        e.currentTarget.style.color = 'var(--gold-light)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isActive) {
+                        e.currentTarget.style.background = 'transparent';
+                        e.currentTarget.style.color = 'var(--text-secondary)';
+                      }
+                    }}
+                  >
+                    <Icon size={19} />
+                  </button>
+                );
+              }
+
+              // Open state: Icon with name and description
               return (
                 <button
                   key={item.id}
@@ -180,21 +245,39 @@ export default function HamburgerDrawer({ isOpen, onClose, activeSection, onSele
                   }}
                   className={`neu-btn ${isActive ? 'active' : ''}`}
                   style={{
-                    padding: '0.85rem 1rem',
+                    padding: '0.8rem 0.95rem',
                     width: '100%',
                     justifyContent: 'flex-start',
                     textAlign: 'left',
                     gap: '0.85rem',
+                    borderRadius: '12px',
                     background: isActive ? 'var(--bg-inset)' : 'var(--bg-card)',
-                    borderColor: isActive ? 'var(--gold-bright)' : 'rgba(255, 255, 255, 0.05)',
+                    borderColor: isActive ? 'var(--gold-bright)' : 'rgba(255, 255, 255, 0.06)',
                   }}
                 >
-                  <Icon size={18} color={isActive ? '#F5D77F' : 'var(--gold-primary)'} />
-                  <div>
-                    <div style={{ fontWeight: '700', fontSize: '0.85rem', color: isActive ? 'var(--gold-bright)' : 'var(--text-white)' }}>
+                  <Icon size={18} color={isActive ? '#F5D77F' : 'var(--gold-primary)'} style={{ flexShrink: 0 }} />
+                  <div style={{ overflow: 'hidden' }}>
+                    <div
+                      style={{
+                        fontWeight: '700',
+                        fontSize: '0.85rem',
+                        color: isActive ? 'var(--gold-bright)' : 'var(--text-white)',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
                       {item.label}
                     </div>
-                    <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                    <div
+                      style={{
+                        fontSize: '0.68rem',
+                        color: 'var(--text-muted)',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
                       {item.desc}
                     </div>
                   </div>
@@ -204,34 +287,36 @@ export default function HamburgerDrawer({ isOpen, onClose, activeSection, onSele
           </div>
         </div>
 
-        {/* Footer with Logout */}
-        <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '1rem' }}>
-          <button
-            onClick={logout}
-            style={{
-              width: '100%',
-              padding: '0.75rem',
-              background: 'transparent',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
-              borderRadius: '12px',
-              color: '#F87171',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.5rem',
-              fontSize: '0.82rem',
-              fontWeight: '600',
-              transition: 'background 0.2s',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(239, 68, 68, 0.12)')}
-            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-          >
-            <LogOut size={16} />
-            <span>Sign Out</span>
-          </button>
-        </div>
-      </div>
-    </div>
+        {/* Footer (when open, show logout option) */}
+        {isOpen && (
+          <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.06)', padding: '1rem 1.25rem' }}>
+            <button
+              onClick={logout}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                background: 'transparent',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '12px',
+                color: '#F87171',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem',
+                fontSize: '0.82rem',
+                fontWeight: '600',
+                transition: 'background 0.2s',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(239, 68, 68, 0.12)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+            >
+              <LogOut size={16} />
+              <span>Sign Out</span>
+            </button>
+          </div>
+        )}
+      </aside>
+    </>
   );
 }

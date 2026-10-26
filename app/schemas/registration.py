@@ -10,6 +10,7 @@ class TeamMemberCreate(BaseModel):
     email: EmailStr
     phone: str
     college_name: str
+    department: Optional[str] = None
     course_and_semester: Optional[str] = None
     roll_no: Optional[str] = None
 
@@ -20,6 +21,7 @@ class TeamMemberResponse(BaseModel):
     email: str
     phone: str
     college_name: str
+    department: Optional[str] = None
     course_and_semester: Optional[str] = None
     roll_no: Optional[str] = None
     created_at: datetime

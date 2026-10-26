@@ -1,6 +1,7 @@
 import React from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Calendar, MapPin, CheckCircle, Clock, Users, Award, Printer, Shield } from 'lucide-react';
+import AsthraLogo from './AsthraLogo';
 
 export default function DigitalTicketPass({ registration, onClose }) {
   if (!registration) return null;
@@ -26,27 +27,30 @@ export default function DigitalTicketPass({ registration, onClose }) {
           flexWrap: 'wrap',
           gap: '1rem',
         }}>
-          <div>
-            <div style={{
-              display: 'inline-block',
-              fontSize: '0.65rem',
-              letterSpacing: '0.25em',
-              textTransform: 'uppercase',
-              color: 'var(--gold-bright)',
-              fontWeight: '700',
-              marginBottom: '0.3rem',
-            }}>
-              ASTHRA 26 OFFICIAL ENTRY PASS
-            </div>
-            <h2 className="font-display gold-text-glow" style={{ fontSize: '1.6rem', fontWeight: '800' }}>
-              {registration.event_title || 'Fest Event'}
-            </h2>
-            {registration.team_name && (
-              <div style={{ fontSize: '0.95rem', color: 'var(--gold-light)', display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.2rem' }}>
-                <Award size={16} color="#D4AF37" />
-                Team: <strong>{registration.team_name}</strong>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+            <AsthraLogo size={44} />
+            <div>
+              <div style={{
+                display: 'inline-block',
+                fontSize: '0.65rem',
+                letterSpacing: '0.25em',
+                textTransform: 'uppercase',
+                color: 'var(--gold-bright)',
+                fontWeight: '700',
+                marginBottom: '0.2rem',
+              }}>
+                ASTHRA 26 OFFICIAL ENTRY PASS
               </div>
-            )}
+              <h2 className="font-display gold-text-glow" style={{ fontSize: '1.6rem', fontWeight: '800' }}>
+                {registration.event_title || 'Fest Event'}
+              </h2>
+              {registration.team_name && (
+                <div style={{ fontSize: '0.95rem', color: 'var(--gold-light)', display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.2rem' }}>
+                  <Award size={16} color="#D4AF37" />
+                  <strong>{registration.team_name}</strong>
+                </div>
+              )}
+            </div>
           </div>
 
           <div style={{ textAlign: 'right' }}>
@@ -155,23 +159,38 @@ export default function DigitalTicketPass({ registration, onClose }) {
           </div>
         </div>
 
-        {/* Teammates List if present */}
+        {/* Teammates List if present - Requirement 8: All details shown */}
         {registration.team_members && registration.team_members.length > 0 && (
           <div style={{
             background: 'var(--bg-inset)',
-            padding: '1rem',
-            borderRadius: '12px',
+            padding: '1.25rem',
+            borderRadius: '14px',
             boxShadow: 'var(--neu-shadow-inset)',
             marginBottom: '1.5rem',
           }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--gold-bright)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--gold-bright)', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
               <Users size={14} /> Teammates ({registration.team_members.length})
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
               {registration.team_members.map((member, idx) => (
-                <div key={idx} style={{ fontSize: '0.78rem', color: 'var(--text-offwhite)', background: 'rgba(255,255,255,0.02)', padding: '0.4rem 0.6rem', borderRadius: '6px' }}>
-                  <strong>{member.full_name}</strong>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{member.college_name || 'College'}</div>
+                <div key={idx} style={{
+                  fontSize: '0.82rem',
+                  color: 'var(--text-offwhite)',
+                  background: 'rgba(255,255,255,0.03)',
+                  border: '1px solid rgba(255,255,255,0.05)',
+                  padding: '0.75rem 0.95rem',
+                  borderRadius: '10px',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem', flexWrap: 'wrap' }}>
+                    <strong style={{ color: 'var(--text-white)' }}>#{idx + 2} {member.full_name}</strong>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--gold-light)' }}>📞 {member.phone}</span>
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.3rem' }}>
+                    <div>✉️ {member.email}</div>
+                    <div>🏫 {member.college_name}</div>
+                    {member.department && <div>🏢 {member.department}</div>}
+                    {member.course_and_semester && <div>📚 {member.course_and_semester}</div>}
+                  </div>
                 </div>
               ))}
             </div>
