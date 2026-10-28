@@ -559,7 +559,9 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
         min_team_size: eventForm.event_type === 'INDIVIDUAL' ? 1 : parseInt(eventForm.min_team_size || 1),
         max_team_size: eventForm.event_type === 'INDIVIDUAL' ? 1 : parseInt(eventForm.max_team_size || 1),
         max_capacity: parseInt(eventForm.max_capacity) || null,
-        registration_deadline: new Date(eventForm.registration_deadline).toISOString(),
+        registration_deadline: eventForm.registration_deadline
+          ? new Date(eventForm.registration_deadline).toISOString()
+          : new Date(Date.now() + 365 * 86400000).toISOString(),
         event_date: new Date(eventForm.event_date).toISOString(),
       };
 
@@ -1012,17 +1014,7 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
         subtext="Synchronizing participant entry status..."
       />
 
-      <LoadingOverlay
-        active={adminRegLoading}
-        message="Filtering Participant Roster..."
-        subtext="Retrieving filtered database records..."
-      />
 
-      <LoadingOverlay
-        active={adminEventsLoading}
-        message="Loading Competitions..."
-        subtext="Retrieving event roster and schedule details..."
-      />
 
       <LoadingOverlay
         active={Boolean(portalActionLoading)}
@@ -1369,7 +1361,18 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
 
               {/* Search Bar (Works based on selected filters above) */}
               <div style={{ position: 'relative', marginBottom: '1.5rem' }}>
-                <Search size={18} color="var(--text-muted)" style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)' }} />
+                <Search
+                  size={18}
+                  style={{
+                    position: 'absolute',
+                    left: '1rem',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: 'var(--gold-bright)',
+                    opacity: 0.85,
+                    pointerEvents: 'none',
+                  }}
+                />
                 <input
                   type="text"
                   placeholder="Search filtered participants by name, code, phone, team, or college..."
@@ -2347,31 +2350,47 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
               <label style={{ fontSize: '0.72rem', fontWeight: '600', color: 'var(--gold-bright)', display: 'block', marginBottom: '0.35rem', letterSpacing: '0.04em' }}>
                 Search
               </label>
-              <input
-                type="text"
-                placeholder="Search name, code, phone, team..."
-                value={participantSearch}
-                onChange={(e) => setParticipantSearch(e.target.value)}
-                style={{
-                  width: '100%',
-                  height: '42px',
-                  background: '#0d0d16',
-                  border: '1px solid rgba(212, 175, 55, 0.35)',
-                  borderRadius: '12px',
-                  padding: '0.55rem 0.85rem',
-                  fontSize: '0.82rem',
-                  fontWeight: '500',
-                  color: 'var(--text-white)',
-                  outline: 'none',
-                  boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
-                }}
-              />
+              <div style={{ position: 'relative', width: '100%' }}>
+                <Search
+                  size={16}
+                  style={{
+                    position: 'absolute',
+                    left: '0.85rem',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: 'var(--gold-bright)',
+                    opacity: 0.8,
+                    pointerEvents: 'none',
+                  }}
+                />
+                <input
+                  type="text"
+                  placeholder="Search name, code, phone, team..."
+                  value={participantSearch}
+                  onChange={(e) => setParticipantSearch(e.target.value)}
+                  style={{
+                    width: '100%',
+                    height: '42px',
+                    background: '#0d0d16',
+                    border: '1px solid rgba(212, 175, 55, 0.35)',
+                    borderRadius: '12px',
+                    padding: '0.55rem 0.85rem 0.55rem 2.4rem',
+                    fontSize: '0.82rem',
+                    fontWeight: '500',
+                    color: 'var(--text-white)',
+                    outline: 'none',
+                    boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
+                  }}
+                />
+              </div>
             </div>
           </div>
 
           {/* Participants Table */}
           {adminRegLoading ? (
-            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--gold-bright)' }}>Loading participants...</div>
+            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
+              Loading participants...
+            </div>
           ) : filteredAdminRegistrations.length === 0 ? (
             <div style={{ padding: '3rem', textAlign: 'center', background: 'var(--bg-card)', borderRadius: '16px', color: 'var(--text-secondary)' }}>
               {participantSearch.trim()
@@ -2572,7 +2591,11 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
             </button>
           </div>
 
-          {allEvents.length === 0 && !adminEventsLoading ? (
+          {adminEventsLoading ? (
+            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
+              Loading events...
+            </div>
+          ) : allEvents.length === 0 ? (
             <div style={{ padding: '3rem', textAlign: 'center', background: 'var(--bg-card)', borderRadius: '16px', color: 'var(--text-secondary)' }}>
               No events created yet. Click "Create Event" above to create your first competition.
             </div>

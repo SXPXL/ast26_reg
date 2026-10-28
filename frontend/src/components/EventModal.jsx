@@ -18,6 +18,7 @@ import {
   ShieldCheck,
   FileText,
   User,
+  Sparkles,
 } from 'lucide-react';
 
 export default function EventModal({ event, onClose, onRegistered }) {
@@ -39,7 +40,38 @@ export default function EventModal({ event, onClose, onRegistered }) {
     }
   })();
 
+  // Retrieve saved profile from previous registrations for autofill
+  const savedProfile = (() => {
+    try {
+      const raw = localStorage.getItem('asthra_user_profile');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  })();
+
   const [restoredNotice, setRestoredNotice] = useState(Boolean(savedDraft?.formData));
+  const [showAutofillPrompt, setShowAutofillPrompt] = useState(() => {
+    if (!savedProfile) return false;
+    // Don't show if formData is already populated by saved draft
+    if (savedDraft?.formData?.primary_name && savedDraft?.formData?.primary_email) return false;
+    return true;
+  });
+
+  const handleApplyAutofill = () => {
+    if (!savedProfile) return;
+    setFormData((prev) => ({
+      ...prev,
+      primary_name: savedProfile.primary_name || prev.primary_name,
+      primary_email: savedProfile.primary_email || prev.primary_email,
+      primary_phone: savedProfile.primary_phone || prev.primary_phone,
+      college_name: savedProfile.college_name || prev.college_name,
+      department: savedProfile.department || prev.department,
+      semester: savedProfile.semester || prev.semester,
+    }));
+    setShowAutofillPrompt(false);
+    toastSuccess('Autofilled from your previous registration!');
+  };
 
   // Steps: 'rules' | 'form' | 'confirm' | 'ticket'
   const [step, setStep] = useState(() => {
@@ -137,6 +169,21 @@ export default function EventModal({ event, onClose, onRegistered }) {
           return;
         }
       }
+    }
+
+    // Persist user profile to localStorage for future event autofill
+    try {
+      const userProfile = {
+        primary_name: formData.primary_name.trim(),
+        primary_email: formData.primary_email.trim(),
+        primary_phone: formData.primary_phone.trim(),
+        college_name: formData.college_name.trim(),
+        department: formData.department.trim(),
+        semester: formData.semester.trim(),
+      };
+      localStorage.setItem('asthra_user_profile', JSON.stringify(userProfile));
+    } catch (e) {
+      console.warn('Could not cache user profile in localStorage:', e);
     }
 
     // Persist form draft in sessionStorage so user never loses their data
@@ -451,6 +498,96 @@ export default function EventModal({ event, onClose, onRegistered }) {
               >
                 <AlertCircle size={18} />
                 <span>{error}</span>
+              </div>
+            )}
+
+            {/* Small Autofill Prompt if user details exist in localStorage */}
+            {showAutofillPrompt && savedProfile && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '0.85rem',
+                  padding: '0.85rem 1.1rem',
+                  background: 'linear-gradient(135deg, rgba(212, 175, 55, 0.12) 0%, rgba(26, 26, 36, 0.6) 100%)',
+                  border: '1px solid rgba(212, 175, 55, 0.4)',
+                  borderRadius: '14px',
+                  marginBottom: '1.25rem',
+                  boxShadow: '0 4px 18px rgba(0, 0, 0, 0.4)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0 }}>
+                  <div
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%',
+                      background: 'rgba(212, 175, 55, 0.18)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Sparkles size={17} color="#D4AF37" />
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-white)' }}>
+                      Autofill from your previous registration?
+                    </div>
+                    <div
+                      style={{
+                        fontSize: '0.74rem',
+                        color: 'var(--text-secondary)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {savedProfile.primary_name || 'Participant'}{savedProfile.college_name ? ` • ${savedProfile.college_name}` : ''}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+                  <button
+                    type="button"
+                    onClick={handleApplyAutofill}
+                    style={{
+                      background: 'linear-gradient(135deg, #D4AF37, #AA7C11)',
+                      color: '#000',
+                      border: 'none',
+                      padding: '0.4rem 0.9rem',
+                      borderRadius: '8px',
+                      fontWeight: '700',
+                      fontSize: '0.78rem',
+                      cursor: 'pointer',
+                      boxShadow: '0 2px 10px rgba(212, 175, 55, 0.3)',
+                    }}
+                  >
+                    Autofill
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowAutofillPrompt(false)}
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      color: 'var(--text-muted)',
+                      width: '28px',
+                      height: '28px',
+                      borderRadius: '6px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                    }}
+                    title="Dismiss"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
               </div>
             )}
 

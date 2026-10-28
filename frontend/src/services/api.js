@@ -135,6 +135,14 @@ export const api = {
   getRegistrationByCode: async (code) => {
     return apiRequest(`/registrations/code/${code}`);
   },
+  getRegistrationsByEmail: async (email) => {
+    return apiRequest(`/registrations/by-email/${encodeURIComponent(email)}`);
+  },
+  recheckRegistrationPayment: async (registrationId) => {
+    return apiRequest(`/registrations/${registrationId}/recheck-payment`, {
+      method: 'POST',
+    });
+  },
   getRegistrations: async (params = {}) => {
     const query = new URLSearchParams();
     if (params.event_id) query.append('event_id', params.event_id);

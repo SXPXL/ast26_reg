@@ -3,11 +3,20 @@ import { api } from '../services/api';
 import EventCard from '../components/EventCard';
 import EventCardSkeleton from '../components/EventCardSkeleton';
 import EventModal from '../components/EventModal';
+import CheckStatusModal from '../components/CheckStatusModal';
 import SplashLoader from '../components/SplashLoader';
+import { Ticket } from 'lucide-react';
 export default function ParticipantPage() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [showStatusModal, setShowStatusModal] = useState(false);
+
+  useEffect(() => {
+    const handleOpenStatus = () => setShowStatusModal(true);
+    window.addEventListener('open-check-status', handleOpenStatus);
+    return () => window.removeEventListener('open-check-status', handleOpenStatus);
+  }, []);
 
   // Splash animation management - skip splash if returning for retry
   const isRetry = Boolean(new URLSearchParams(window.location.search).get('retry_event'));
@@ -92,8 +101,17 @@ export default function ParticipantPage() {
       {showSplash && <SplashLoader isFadingOut={isFadingOut} />}
 
       <div className="page-container" style={{ maxWidth: '1280px', margin: '0 auto' }}>
-        {/* Top Description (without hero text) */}
-        <div style={{ marginBottom: '2rem' }}>
+        {/* Top Description & Check Status Action */}
+        <div
+          style={{
+            marginBottom: '2rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '1.25rem',
+            flexWrap: 'wrap',
+          }}
+        >
           <p
             style={{
               fontSize: '1rem',
@@ -106,6 +124,36 @@ export default function ParticipantPage() {
             Browse flagship competitions, individual battles, and team squad challenges.
             Register in seconds and claim your instant verified digital entry pass.
           </p>
+
+          <button
+            onClick={() => setShowStatusModal(true)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.6rem',
+              padding: '0.65rem 1.25rem',
+              borderRadius: '12px',
+              border: '1px solid rgba(212, 175, 55, 0.4)',
+              background: 'linear-gradient(135deg, rgba(212, 175, 55, 0.12) 0%, rgba(26, 26, 36, 0.7) 100%)',
+              color: 'var(--gold-bright)',
+              fontWeight: '700',
+              fontSize: '0.88rem',
+              cursor: 'pointer',
+              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.35)',
+              transition: 'all 0.2s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = 'var(--gold-bright)';
+              e.currentTarget.style.boxShadow = '0 0 16px rgba(212, 175, 55, 0.35)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.4)';
+              e.currentTarget.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.35)';
+            }}
+          >
+            <Ticket size={17} color="#D4AF37" />
+            <span>Check Registration Status</span>
+          </button>
         </div>
 
         {/* Events Grid */}
@@ -150,6 +198,12 @@ export default function ParticipantPage() {
             onRegistered={refreshEvents}
           />
         )}
+
+        {/* Check Registration Status Modal */}
+        <CheckStatusModal
+          isOpen={showStatusModal}
+          onClose={() => setShowStatusModal(false)}
+        />
       </div>
     </>
   );

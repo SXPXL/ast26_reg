@@ -96,7 +96,7 @@ export default function Navbar({ isVolunteerRoute, onNavigate, onToggleDrawer, d
           </div>
         </div>
 
-        {/* Top Right: Instagram Default DP Profile Option */}
+          {/* Top Right: Instagram Default DP Profile Option */ }
         {showVolunteerControls && (
           <div ref={dropdownRef} style={{ position: 'relative' }}>
             <button

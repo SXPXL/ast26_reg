@@ -46,14 +46,7 @@ async def create_registration(
             detail="Event not found or registration is closed.",
         )
 
-    # Check deadline
-    now_utc = datetime.now(timezone.utc)
-    if event.registration_deadline and event.registration_deadline < now_utc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Registration deadline for this event has passed.",
-        )
-
+    # Registration is purely controlled by admin visibility (event.is_active)
     # Check capacity
     if event.max_capacity:
         count_res = await db.execute(
@@ -219,6 +212,127 @@ async def get_registration_by_code(
     res.event_title = reg.event.title if reg.event else None
     res.marked_by_name = reg.marked_by_volunteer.full_name if reg.marked_by_volunteer else None
     return res
+
+
+@router.get("/by-email/{email}", response_model=List[RegistrationDetailResponse])
+async def get_registrations_by_email(
+    email: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Public lookup for all registrations submitted under a participant email."""
+    cleaned_email = email.lower().strip()
+    query = (
+        select(Registration)
+        .where(
+            or_(
+                func.lower(Registration.primary_email) == cleaned_email,
+                Registration.id.in_(
+                    select(TeamMember.registration_id).where(func.lower(TeamMember.email) == cleaned_email)
+                ),
+            )
+        )
+        .options(
+            selectinload(Registration.event),
+            selectinload(Registration.team_members),
+            selectinload(Registration.marked_by_volunteer),
+        )
+        .order_by(Registration.created_at.desc())
+    )
+    result = await db.execute(query)
+    regs = result.scalars().all()
+
+    items = []
+    for reg in regs:
+        res = RegistrationDetailResponse.model_validate(reg)
+        res.event_title = reg.event.title if reg.event else None
+        res.marked_by_name = reg.marked_by_volunteer.full_name if reg.marked_by_volunteer else None
+        items.append(res)
+    return items
+
+
+@router.post("/{registration_id}/recheck-payment")
+async def recheck_registration_payment(
+    registration_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Recheck payment status with Cashfree for a specific registration.
+    Updates the registration payment status to SUCCESS if verified as paid.
+    """
+    reg_res = await db.execute(
+        select(Registration).where(Registration.id == registration_id).options(
+            selectinload(Registration.event)
+        )
+    )
+    reg = reg_res.scalars().first()
+    if not reg:
+        raise HTTPException(status_code=404, detail="Registration record not found.")
+
+    if reg.payment_status == PaymentStatus.SUCCESS.value:
+        return {
+            "registration_id": reg.id,
+            "payment_status": "SUCCESS",
+            "message": "Payment is already confirmed.",
+            "success": True,
+        }
+
+    # Find Cashfree PaymentOrder associated with this registration
+    order_res = await db.execute(
+        select(PaymentOrder)
+        .where(PaymentOrder.registration_id == reg.id)
+        .order_by(PaymentOrder.created_at.desc())
+    )
+    order = order_res.scalars().first()
+    if not order or not order.cf_order_id:
+        return {
+            "registration_id": reg.id,
+            "payment_status": reg.payment_status,
+            "message": "No online payment order record found for this registration.",
+            "success": False,
+        }
+
+    # Query Cashfree gateway for latest status
+    try:
+        cf_status = await cashfree_service.get_order_status(order.cf_order_id)
+        cf_order_status = cf_status.get("order_status", "ACTIVE").upper()
+
+        if cf_order_status == "PAID":
+            order.payment_status = PaymentOrderStatus.PAID.value
+            reg.payment_status = PaymentStatus.SUCCESS.value
+            await db.commit()
+            return {
+                "registration_id": reg.id,
+                "payment_status": "SUCCESS",
+                "message": "Payment verified successfully!",
+                "success": True,
+            }
+
+        # Check transactions list for this order
+        payments = await cashfree_service.get_order_payments(order.cf_order_id)
+        if payments and any(p.get("payment_status", "").upper() == "SUCCESS" for p in payments):
+            order.payment_status = PaymentOrderStatus.PAID.value
+            reg.payment_status = PaymentStatus.SUCCESS.value
+            await db.commit()
+            return {
+                "registration_id": reg.id,
+                "payment_status": "SUCCESS",
+                "message": "Payment verified successfully!",
+                "success": True,
+            }
+
+        return {
+            "registration_id": reg.id,
+            "payment_status": reg.payment_status,
+            "message": f"Payment is currently {cf_order_status.lower()}.",
+            "success": False,
+        }
+    except Exception as e:
+        return {
+            "registration_id": reg.id,
+            "payment_status": reg.payment_status,
+            "message": f"Payment check: {str(e)}",
+            "success": False,
+        }
 
 
 @router.get("", response_model=List[RegistrationSummary])
