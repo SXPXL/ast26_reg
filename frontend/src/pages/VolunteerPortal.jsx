@@ -265,12 +265,12 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
     };
   }, [eventDropdownOpen, manualDropdownOpen]);
 
-  // Load all participants when admin enters 'participants' tab
+  // Load all participants when admin enters 'participants' tab or dropdown filters change
   useEffect(() => {
     if (isAdmin && activeSection === 'participants') {
       fetchAdminRegistrations();
     }
-  }, [activeSection, isAdmin, participantFilterEvent, participantFilterAttendance, participantFilterPaymentMode, participantFilterPaymentStatus, participantSearch]);
+  }, [activeSection, isAdmin, participantFilterEvent, participantFilterAttendance, participantFilterPaymentMode, participantFilterPaymentStatus]);
 
   // Load events with spinner when admin enters 'events' tab
   useEffect(() => {
@@ -384,7 +384,6 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
       if (participantFilterAttendance !== 'ALL') params.attendance_status = participantFilterAttendance;
       if (participantFilterPaymentMode !== 'ALL') params.payment_mode = participantFilterPaymentMode;
       if (participantFilterPaymentStatus !== 'ALL') params.payment_status = participantFilterPaymentStatus;
-      if (participantSearch.trim()) params.search = participantSearch.trim();
 
       const data = await api.getRegistrations(params);
       setAdminRegistrations(data || []);
@@ -832,6 +831,38 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
   }, [registrations]);
 
   const attendedCount = validRegistrations.filter((r) => r.attendance_status === 'PRESENT').length;
+
+  // Instant in-memory search for Admin Participants tab without reloading / spinner
+  const filteredAdminRegistrations = useMemo(() => {
+    if (!participantSearch.trim()) return adminRegistrations;
+    const term = participantSearch.toLowerCase().trim();
+    return adminRegistrations.filter((r) => {
+      const matchName = r.primary_name?.toLowerCase().includes(term);
+      const matchCode = r.registration_code?.toLowerCase().includes(term);
+      const matchPhone = r.primary_phone?.includes(term);
+      const matchEmail = r.primary_email?.toLowerCase().includes(term);
+      const matchCollege = r.college_name?.toLowerCase().includes(term);
+      const matchCourse = r.course_and_semester?.toLowerCase().includes(term);
+      const matchEvent = r.event_title?.toLowerCase().includes(term);
+      const matchTeam = r.team_name?.toLowerCase().includes(term);
+      const matchTeammates = r.team_members?.some((m) =>
+        m.full_name?.toLowerCase().includes(term) ||
+        m.phone?.includes(term) ||
+        m.email?.toLowerCase().includes(term)
+      );
+      return (
+        matchName ||
+        matchCode ||
+        matchPhone ||
+        matchEmail ||
+        matchCollege ||
+        matchCourse ||
+        matchEvent ||
+        matchTeam ||
+        matchTeammates
+      );
+    });
+  }, [adminRegistrations, participantSearch]);
 
   // 1. IF AUTH SESSION IS CURRENTLY INITIALIZING/VERIFYING (e.g. on page refresh), NEVER FLASH LOGIN FORM
   if (authLoading && !user) {
@@ -2143,7 +2174,7 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
               <div style={{ background: 'var(--bg-card)', padding: '0.65rem 1.25rem', borderRadius: '12px', border: '1px solid rgba(212, 175, 55, 0.2)' }}>
                 <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Filtered Count</div>
                 <div className="font-mono" style={{ fontSize: '1.25rem', fontWeight: '800', color: 'var(--gold-bright)' }}>
-                  {adminRegistrations.length}
+                  {filteredAdminRegistrations.length}
                 </div>
               </div>
             </div>
@@ -2340,13 +2371,15 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
           {/* Participants Table */}
           {adminRegLoading ? (
             <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--gold-bright)' }}>Loading participants...</div>
-          ) : adminRegistrations.length === 0 ? (
+          ) : filteredAdminRegistrations.length === 0 ? (
             <div style={{ padding: '3rem', textAlign: 'center', background: 'var(--bg-card)', borderRadius: '16px', color: 'var(--text-secondary)' }}>
-              No participants match the selected filter criteria.
+              {participantSearch.trim()
+                ? `No participants found matching "${participantSearch.trim()}".`
+                : 'No participants match the selected filter criteria.'}
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {adminRegistrations.map((reg) => {
+              {filteredAdminRegistrations.map((reg) => {
                 const isPresent = reg.attendance_status === 'PRESENT';
                 const isHidden = reg.attendance_status === 'HIDDEN';
                 return (
