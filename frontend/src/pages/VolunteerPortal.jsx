@@ -3,6 +3,8 @@ import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import DigitalTicketPass from '../components/DigitalTicketPass';
+import LoadingOverlay from '../components/LoadingOverlay';
+import AsthraLogo from '../components/AsthraLogo';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   CheckCircle,
@@ -33,8 +35,8 @@ import {
   FileSpreadsheet,
 } from 'lucide-react';
 
-export default function VolunteerPortal({ activeSection = 'status' }) {
-  const { user, login } = useAuth();
+export default function VolunteerPortal({ activeSection = 'status', onSelectSection }) {
+  const { user, loading: authLoading, login } = useAuth();
   const toast = useToast();
 
   // Login form state
@@ -45,7 +47,9 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
 
   // Volunteer & Event data
   const [assignedEvents, setAssignedEvents] = useState([]);
-  const [selectedEventId, setSelectedEventId] = useState('');
+  const [selectedEventId, setSelectedEventId] = useState(() => {
+    return sessionStorage.getItem('asthra_volunteer_selected_event') || '';
+  });
   const [registrations, setRegistrations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -60,6 +64,7 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
 
   // Admin section states
   const [allEvents, setAllEvents] = useState([]);
+  const [adminEventsLoading, setAdminEventsLoading] = useState(false);
   const [volunteers, setVolunteers] = useState([]);
   const [stats, setStats] = useState(null);
 
@@ -67,18 +72,23 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
   const [participantFilterEvent, setParticipantFilterEvent] = useState('ALL');
   const [participantFilterAttendance, setParticipantFilterAttendance] = useState('ALL');
   const [participantFilterPaymentMode, setParticipantFilterPaymentMode] = useState('ALL');
+  const [participantFilterPaymentStatus, setParticipantFilterPaymentStatus] = useState('SUCCESS');
   const [participantSearch, setParticipantSearch] = useState('');
   const [adminRegistrations, setAdminRegistrations] = useState([]);
   const [adminRegLoading, setAdminRegLoading] = useState(false);
 
   // Manual Spot Registration state
-  const [manualEventId, setManualEventId] = useState('');
+  const [manualEventId, setManualEventId] = useState(() => {
+    return sessionStorage.getItem('asthra_manual_event_id') || '';
+  });
   const [manualDropdownOpen, setManualDropdownOpen] = useState(false);
   const manualDropdownRef = useRef(null);
   const [manualPaymentMode, setManualPaymentMode] = useState('OFFLINE'); // 'OFFLINE' | 'ONLINE'
   const [manualSubmitting, setManualSubmitting] = useState(false);
   const [manualSuccessTicket, setManualSuccessTicket] = useState(null);
   const [manualOnlineOrder, setManualOnlineOrder] = useState(null);
+  const [verifyingOnline, setVerifyingOnline] = useState(false);
+  const [portalActionLoading, setPortalActionLoading] = useState(null);
   const [manualForm, setManualForm] = useState({
     primary_name: '',
     primary_email: '',
@@ -137,7 +147,83 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
     return saved ? { ...defaultSettings, ...JSON.parse(saved) } : defaultSettings;
   });
 
+  // Admin Credentials Change State
+  const [adminCredForm, setAdminCredForm] = useState({
+    username: user?.username || 'admin',
+    newPassword: '',
+    confirmPassword: '',
+    currentPassword: '',
+  });
+  const [credUpdating, setCredUpdating] = useState(false);
+
+  useEffect(() => {
+    if (user?.username) {
+      setAdminCredForm((prev) => ({ ...prev, username: user.username }));
+    }
+  }, [user]);
+
+  const handleChangeAdminCredentials = async (e) => {
+    e.preventDefault();
+    if (adminCredForm.newPassword) {
+      if (adminCredForm.newPassword.length < 4) {
+        toast.error('New password must be at least 4 characters long.');
+        return;
+      }
+      if (adminCredForm.newPassword !== adminCredForm.confirmPassword) {
+        toast.error('New passwords do not match.');
+        return;
+      }
+      if (!adminCredForm.currentPassword) {
+        toast.error('Please enter your current password to confirm the password change.');
+        return;
+      }
+    }
+
+    try {
+      setCredUpdating(true);
+      const payload = {};
+      if (adminCredForm.username.trim() && adminCredForm.username.trim() !== (user?.username || '')) {
+        payload.new_username = adminCredForm.username.trim();
+      }
+      if (adminCredForm.newPassword) {
+        payload.new_password = adminCredForm.newPassword;
+        payload.current_password = adminCredForm.currentPassword;
+      }
+
+      if (Object.keys(payload).length === 0) {
+        toast.info('No changes were entered.');
+        return;
+      }
+
+      const updated = await api.changeCredentials(payload);
+      toast.success('Admin credentials updated successfully!');
+      setAdminCredForm({
+        username: updated.username || adminCredForm.username,
+        newPassword: '',
+        confirmPassword: '',
+        currentPassword: '',
+      });
+      if (user && updated.username) {
+        user.username = updated.username;
+      }
+    } catch (err) {
+      toast.error(err.message || 'Failed to update credentials.');
+    } finally {
+      setCredUpdating(false);
+    }
+  };
+
   const isAdmin = user && (user.role === 'ADMIN' || user.id === '00000000-0000-0000-0000-000000000001');
+
+  // If non-admin user lands on an admin-only section, redirect them gracefully to 'status'
+  useEffect(() => {
+    if (user && !isAdmin) {
+      const adminSections = ['participants', 'events', 'stats', 'volunteers', 'settings'];
+      if (adminSections.includes(activeSection)) {
+        onSelectSection?.('status');
+      }
+    }
+  }, [user, isAdmin, activeSection, onSelectSection]);
 
   useEffect(() => {
     if (user) {
@@ -150,9 +236,16 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
 
   useEffect(() => {
     if (selectedEventId) {
+      sessionStorage.setItem('asthra_volunteer_selected_event', selectedEventId);
       fetchEventRegistrations(selectedEventId);
     }
   }, [selectedEventId]);
+
+  useEffect(() => {
+    if (manualEventId) {
+      sessionStorage.setItem('asthra_manual_event_id', manualEventId);
+    }
+  }, [manualEventId]);
 
   // Close event and manual dropdowns when clicking outside
   useEffect(() => {
@@ -177,7 +270,14 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
     if (isAdmin && activeSection === 'participants') {
       fetchAdminRegistrations();
     }
-  }, [activeSection, isAdmin, participantFilterEvent, participantFilterAttendance, participantFilterPaymentMode, participantSearch]);
+  }, [activeSection, isAdmin, participantFilterEvent, participantFilterAttendance, participantFilterPaymentMode, participantFilterPaymentStatus, participantSearch]);
+
+  // Load events with spinner when admin enters 'events' tab
+  useEffect(() => {
+    if (isAdmin && activeSection === 'events') {
+      loadAdminEvents();
+    }
+  }, [activeSection, isAdmin]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -199,14 +299,44 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
       setLoading(true);
       const events = await api.getMyEvents();
       setAssignedEvents(events || []);
-      if (events && events.length > 0 && !selectedEventId) {
-        setSelectedEventId(events[0].id);
-        setManualEventId(events[0].id);
+      if (events && events.length > 0) {
+        const savedEventId = sessionStorage.getItem('asthra_volunteer_selected_event');
+        const match = events.find((e) => e.id === savedEventId);
+        if (match) {
+          setSelectedEventId(match.id);
+        } else if (!selectedEventId) {
+          setSelectedEventId(events[0].id);
+        }
+
+        const savedManualId = sessionStorage.getItem('asthra_manual_event_id');
+        const manualMatch = events.find((e) => e.id === savedManualId);
+        if (manualMatch) {
+          setManualEventId(manualMatch.id);
+        } else if (!manualEventId) {
+          setManualEventId(events[0].id);
+        }
       }
     } catch (err) {
       console.error('Failed to load volunteer events:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadAdminEvents = async () => {
+    try {
+      setAdminEventsLoading(true);
+      const allEvs = await api.getEvents({ is_active: undefined });
+      setAllEvents(allEvs || []);
+      if (allEvs && allEvs.length > 0 && !manualEventId) {
+        const savedManualId = sessionStorage.getItem('asthra_manual_event_id');
+        const manualMatch = allEvs.find((e) => e.id === savedManualId);
+        setManualEventId(manualMatch ? manualMatch.id : allEvs[0].id);
+      }
+    } catch (err) {
+      console.error('Failed to load events:', err);
+    } finally {
+      setAdminEventsLoading(false);
     }
   };
 
@@ -220,8 +350,14 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
       setAllEvents(allEvs || []);
       setVolunteers(vols || []);
       setStats(overviewStats);
-      if (allEvs && allEvs.length > 0 && !manualEventId) {
-        setManualEventId(allEvs[0].id);
+      if (allEvs && allEvs.length > 0) {
+        const savedManualId = sessionStorage.getItem('asthra_manual_event_id');
+        const manualMatch = allEvs.find((e) => e.id === savedManualId);
+        if (manualMatch) {
+          setManualEventId(manualMatch.id);
+        } else if (!manualEventId) {
+          setManualEventId(allEvs[0].id);
+        }
       }
     } catch (err) {
       console.error('Failed to load admin data:', err);
@@ -231,7 +367,7 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
   const fetchEventRegistrations = async (eventId) => {
     try {
       setLoading(true);
-      const data = await api.getRegistrations({ event_id: eventId });
+      const data = await api.getRegistrations({ event_id: eventId, payment_status: 'SUCCESS' });
       setRegistrations(data || []);
     } catch (err) {
       console.error('Failed to load registrations:', err);
@@ -247,6 +383,7 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
       if (participantFilterEvent !== 'ALL') params.event_id = participantFilterEvent;
       if (participantFilterAttendance !== 'ALL') params.attendance_status = participantFilterAttendance;
       if (participantFilterPaymentMode !== 'ALL') params.payment_mode = participantFilterPaymentMode;
+      if (participantFilterPaymentStatus !== 'ALL') params.payment_status = participantFilterPaymentStatus;
       if (participantSearch.trim()) params.search = participantSearch.trim();
 
       const data = await api.getRegistrations(params);
@@ -259,6 +396,11 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
   };
 
   const handleToggleAttendance = async (reg) => {
+    if (reg.payment_status && reg.payment_status !== 'SUCCESS') {
+      toast.error('Cannot check in: Participant has not completed payment.');
+      return;
+    }
+
     // The undo function is only available for the admin
     if (reg.attendance_status === 'PRESENT' && !isAdmin) {
       toast.info('Only an administrator can revert a confirmed check-in.');
@@ -310,34 +452,52 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
     if (hideOnDelete) {
       if (!confirm(`Hide participant "${reg.primary_name}"? Their record will be archived as Hidden and excluded from public rosters.`)) return;
       try {
+        setPortalActionLoading({
+          message: 'Archiving Participant...',
+          subtext: `Hiding ${reg.primary_name} from active roster...`,
+        });
         await api.updateAttendance(reg.id, 'HIDDEN');
         toast.success(`Participant "${reg.primary_name}" is now hidden.`);
         fetchAdminRegistrations();
         if (selectedEventId) fetchEventRegistrations(selectedEventId);
       } catch (err) {
         toast.error(`Failed to hide participant: ${err.message}`);
+      } finally {
+        setPortalActionLoading(null);
       }
     } else {
       if (!confirm(`Permanently DELETE participant "${reg.primary_name}"? This action CANNOT be undone.`)) return;
       try {
+        setPortalActionLoading({
+          message: 'Deleting Participant...',
+          subtext: `Permanently removing ${reg.primary_name}...`,
+        });
         await api.deleteRegistration(reg.id);
         toast.success(`Participant "${reg.primary_name}" permanently deleted.`);
         fetchAdminRegistrations();
         if (selectedEventId) fetchEventRegistrations(selectedEventId);
       } catch (err) {
         toast.error(`Failed to delete participant: ${err.message}`);
+      } finally {
+        setPortalActionLoading(null);
       }
     }
   };
 
   const handleRestoreParticipant = async (reg) => {
     try {
+      setPortalActionLoading({
+        message: 'Restoring Participant...',
+        subtext: `Returning ${reg.primary_name} to active roster...`,
+      });
       await api.updateAttendance(reg.id, 'NOT_ATTENDED');
       toast.success(`Restored participant "${reg.primary_name}" to active roster.`);
       fetchAdminRegistrations();
       if (selectedEventId) fetchEventRegistrations(selectedEventId);
     } catch (err) {
       toast.error(`Failed to restore participant: ${err.message}`);
+    } finally {
+      setPortalActionLoading(null);
     }
   };
 
@@ -389,6 +549,10 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
   const handleSaveEvent = async (e) => {
     e.preventDefault();
     try {
+      setPortalActionLoading({
+        message: editingEvent ? 'Updating Competition...' : 'Creating Competition...',
+        subtext: 'Syncing event details and schedule with server...',
+      });
       const payload = {
         ...eventForm,
         registration_fee: parseFloat(eventForm.registration_fee || 0),
@@ -400,30 +564,50 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
       };
 
       if (editingEvent) {
-        await api.updateEvent(editingEvent.id, payload);
+        const updated = await api.updateEvent(editingEvent.id, payload);
         toast.success(`Updated event: ${payload.title}`);
+        setAllEvents((prev) =>
+          prev.map((ev) => (ev.id === editingEvent.id ? { ...ev, ...updated } : ev))
+        );
       } else {
-        await api.createEvent(payload);
+        const created = await api.createEvent(payload);
         toast.success(`Created event: ${payload.title}`);
+        setAllEvents((prev) => [created, ...prev.filter((ev) => ev.id !== created.id)]);
       }
 
       setCreateEventModal(false);
-      loadAdminData();
-      loadVolunteerData();
+      await Promise.all([
+        loadAdminEvents(),
+        loadVolunteerData(),
+      ]);
     } catch (err) {
       toast.error(`Failed to save event: ${err.message}`);
+    } finally {
+      setPortalActionLoading(null);
     }
   };
 
-  const handleDeleteEvent = async (eventId) => {
-    if (!confirm('Are you sure you want to deactivate/delete this event?')) return;
+  const handleToggleEventActive = async (ev) => {
+    const nextActive = !ev.is_active;
+    if (!nextActive) {
+      if (!confirm(`Are you sure you want to deactivate "${ev.title}"? It will be dimmed and hidden from participant registration.`)) return;
+    }
     try {
-      await api.deleteEvent(eventId);
-      toast.success('Event deactivated');
+      setPortalActionLoading({
+        message: `${nextActive ? 'Activating' : 'Deactivating'} Competition...`,
+        subtext: `Updating "${ev.title}" status on server...`,
+      });
+      await api.updateEvent(ev.id, { is_active: nextActive });
+      setAllEvents((prev) =>
+        prev.map((item) => (item.id === ev.id ? { ...item, is_active: nextActive } : item))
+      );
+      toast.success(`Event "${ev.title}" is now ${nextActive ? 'Active' : 'Deactivated'}.`);
       loadAdminData();
       loadVolunteerData();
     } catch (err) {
-      toast.error(`Error: ${err.message}`);
+      toast.error(`Failed to update event: ${err.message}`);
+    } finally {
+      setPortalActionLoading(null);
     }
   };
 
@@ -431,12 +615,18 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
   const handleCreateVolunteer = async (e) => {
     e.preventDefault();
     try {
+      setPortalActionLoading({
+        message: 'Creating Volunteer Account...',
+        subtext: 'Provisioning secure portal credentials...',
+      });
       await api.createVolunteer(newVolForm);
       setNewVolForm({ full_name: '', email: '', phone: '', password: '' });
       toast.success('Volunteer account created successfully!');
       loadAdminData();
     } catch (err) {
       toast.error(`Error: ${err.message}`);
+    } finally {
+      setPortalActionLoading(null);
     }
   };
 
@@ -452,6 +642,10 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
   const handleSaveVolunteerAssignment = async () => {
     if (!selectedEventForAssign) return;
     try {
+      setPortalActionLoading({
+        message: 'Assigning Volunteers...',
+        subtext: 'Updating coordinator permissions on server...',
+      });
       await api.assignVolunteers(selectedEventForAssign.id, selectedVolunteerIds);
       setAssignModalOpen(false);
       toast.success('Volunteers assigned successfully!');
@@ -459,11 +653,13 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
       loadVolunteerData();
     } catch (err) {
       toast.error(`Error: ${err.message}`);
+    } finally {
+      setPortalActionLoading(null);
     }
   };
 
   // Manual Spot Registration Handlers
-  const availableManualEvents = isAdmin ? allEvents : assignedEvents;
+  const availableManualEvents = (isAdmin ? allEvents : assignedEvents).filter((e) => e.is_active !== false);
   const currentSelectedManualEvent = availableManualEvents.find((e) => e.id === manualEventId) || availableManualEvents[0];
   const manualFee = parseFloat(currentSelectedManualEvent?.registration_fee || 0);
   const isManualTeam = currentSelectedManualEvent?.event_type === 'TEAM';
@@ -507,6 +703,22 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
     if (!currentSelectedManualEvent) {
       toast.error('Please select an event');
       return;
+    }
+
+    const primaryPhoneClean = manualForm.primary_phone.replace(/\D/g, '');
+    if (primaryPhoneClean.length < 10) {
+      toast.error('Please enter a valid 10-digit mobile number for primary participant');
+      return;
+    }
+
+    if (isManualTeam) {
+      for (let i = 0; i < manualForm.team_members.length; i++) {
+        const tm = manualForm.team_members[i];
+        if (tm.phone.replace(/\D/g, '').length < 10) {
+          toast.error(`Please enter a valid 10-digit mobile number for Teammate #${i + 1}`);
+          return;
+        }
+      }
     }
 
     try {
@@ -562,6 +774,7 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
   const handleVerifyManualOnline = async () => {
     if (!manualOnlineOrder?.payment_session?.order_id) return;
     try {
+      setVerifyingOnline(true);
       const verifyRes = await api.verifyPayment(manualOnlineOrder.payment_session.order_id);
       if (verifyRes.success) {
         const full = await api.getRegistrationByCode(manualOnlineOrder.registration_code);
@@ -575,12 +788,17 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
       }
     } catch (err) {
       toast.error('Payment verification failed');
+    } finally {
+      setVerifyingOnline(false);
     }
   };
 
   // Filter registrations in event status view based on selected filters and search query
   const filteredRegistrations = useMemo(() => {
     return registrations.filter((r) => {
+      // 0. Only show confirmed paid registrations in the check-in list
+      if (r.payment_status && r.payment_status !== 'SUCCESS') return false;
+
       // 1. Attendance filter
       if (attendanceFilter === 'CHECKED_IN' && r.attendance_status !== 'PRESENT') return false;
       if (attendanceFilter === 'UNCHECKED_IN' && r.attendance_status === 'PRESENT') return false;
@@ -609,13 +827,43 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
     });
   }, [registrations, attendanceFilter, paymentFilter, searchTerm]);
 
-  const attendedCount = registrations.filter((r) => r.attendance_status === 'PRESENT').length;
+  const validRegistrations = useMemo(() => {
+    return registrations.filter((r) => !r.payment_status || r.payment_status === 'SUCCESS');
+  }, [registrations]);
 
-  // 1. SIGN IN SCREEN IF NOT AUTHENTICATED
+  const attendedCount = validRegistrations.filter((r) => r.attendance_status === 'PRESENT').length;
+
+  // 1. IF AUTH SESSION IS CURRENTLY INITIALIZING/VERIFYING (e.g. on page refresh), NEVER FLASH LOGIN FORM
+  if (authLoading && !user) {
+    return (
+      <div
+        style={{
+          minHeight: '75vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <LoadingOverlay
+          active={true}
+          message="Authenticating Session..."
+          subtext="Verifying security credentials..."
+        />
+      </div>
+    );
+  }
+
+  // 2. SIGN IN SCREEN ONLY IF NOT AUTHENTICATED
   if (!user) {
     return (
-      <div style={{ maxWidth: '440px', margin: '5rem auto', padding: '0 1.5rem' }}>
-        <div
+      <>
+        <LoadingOverlay
+          active={loginLoading}
+          message="Signing In..."
+          subtext="Verifying volunteer credentials & security permissions..."
+        />
+        <div style={{ maxWidth: '440px', margin: '5rem auto', padding: '0 1.5rem' }}>
+          <div
           style={{
             background: 'var(--bg-card)',
             borderRadius: '24px',
@@ -625,91 +873,136 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
             textAlign: 'center',
           }}
         >
-          <div
-            style={{
-              width: '54px',
-              height: '54px',
-              borderRadius: '14px',
-              background: 'linear-gradient(135deg, #181824 0%, #0d0d14 100%)',
-              border: '1px solid rgba(212, 175, 55, 0.3)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              margin: '0 auto 1.25rem',
-            }}
-          >
-            <Lock size={22} color="#F5D77F" />
-          </div>
-
-          <h2 className="font-display gold-text-glow" style={{ fontSize: '1.75rem', fontWeight: '800', marginBottom: '0.4rem' }}>
-            Volunteer / Admin Portal
-          </h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.75rem' }}>
-            Sign in to check-in attendees, spot-register participants, and manage events.
-          </p>
-
-          {loginError && (
             <div
               style={{
-                padding: '0.75rem',
-                borderRadius: '10px',
-                background: 'rgba(239, 68, 68, 0.12)',
-                border: '1px solid rgba(239, 68, 68, 0.3)',
-                color: '#F87171',
-                fontSize: '0.82rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 marginBottom: '1.25rem',
               }}
             >
-              {loginError}
-            </div>
-          )}
-
-          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div style={{ textAlign: 'left' }}>
-              <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.3rem', display: 'block' }}>Username</label>
-              <input
-                type="text"
-                placeholder="Username (e.g. admin)"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="neu-input"
-                required
-              />
+              <AsthraLogo size={62} />
             </div>
 
-            <div style={{ textAlign: 'left' }}>
-              <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.3rem', display: 'block' }}>Password</label>
-              <input
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="neu-input"
-                required
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loginLoading}
-              className="neu-btn-gold"
-              style={{ marginTop: '0.5rem', width: '100%', padding: '0.85rem' }}
+            <h2
+              className="font-display gold-text-glow"
+              style={{
+                fontSize: '1.85rem',
+                fontWeight: '800',
+                marginBottom: '1.75rem',
+                letterSpacing: '0.04em',
+              }}
             >
-              {loginLoading ? 'Signing In...' : 'Sign In'}
-            </button>
-          </form>
+              Sign In
+            </h2>
 
-          <div style={{ marginTop: '1.5rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-            Default Admin credentials: <strong>admin</strong> / <strong>1234</strong>
+            {loginError && (
+              <div
+                style={{
+                  padding: '0.75rem',
+                  borderRadius: '10px',
+                  background: 'rgba(239, 68, 68, 0.12)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  color: '#F87171',
+                  fontSize: '0.82rem',
+                  marginBottom: '1.25rem',
+                }}
+              >
+                {loginError}
+              </div>
+            )}
+
+            <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ textAlign: 'left' }}>
+                <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.3rem', display: 'block' }}>Username</label>
+                <input
+                  type="text"
+                  placeholder="Username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="neu-input"
+                  required
+                />
+              </div>
+
+              <div style={{ textAlign: 'left' }}>
+                <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.3rem', display: 'block' }}>Password</label>
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="neu-input"
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loginLoading}
+                className="neu-btn-gold"
+                style={{ marginTop: '0.5rem', width: '100%', padding: '0.85rem' }}
+              >
+                {loginLoading ? 'Signing In...' : 'Sign In'}
+              </button>
+            </form>
           </div>
         </div>
-      </div>
+      </>
     );
   }
 
   // 2. LOGGED IN PORTAL VIEWS
   return (
-    <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '2.5rem 2rem 5rem 5.5rem' }}>
+    <>
+      {/* Loading Overlays with Blurred Backdrop and Asthra Aztec Gold Theme */}
+      <LoadingOverlay
+        active={loading && assignedEvents.length === 0}
+        message="Loading Assigned Events..."
+        subtext="Fetching coordinator permissions and event rosters..."
+      />
+
+      <LoadingOverlay
+        active={manualSubmitting}
+        message="Processing Spot Registration..."
+        subtext="Generating official digital ticket & recording entry..."
+      />
+
+      <LoadingOverlay
+        active={verifyingOnline}
+        message="Verifying Online Payment..."
+        subtext="Querying Cashfree gateway for transaction receipt..."
+      />
+
+      <LoadingOverlay
+        active={Boolean(updatingId)}
+        message="Updating Attendance..."
+        subtext="Synchronizing participant entry status..."
+      />
+
+      <LoadingOverlay
+        active={adminRegLoading}
+        message="Filtering Participant Roster..."
+        subtext="Retrieving filtered database records..."
+      />
+
+      <LoadingOverlay
+        active={adminEventsLoading}
+        message="Loading Competitions..."
+        subtext="Retrieving event roster and schedule details..."
+      />
+
+      <LoadingOverlay
+        active={Boolean(portalActionLoading)}
+        message={portalActionLoading?.message || 'Processing Request...'}
+        subtext={portalActionLoading?.subtext || 'Please wait while we communicate with the server...'}
+      />
+
+      <LoadingOverlay
+        active={credUpdating}
+      />
+
+      <div className="portal-content-container" style={{ maxWidth: '1280px', margin: '0 auto' }}>
       {/* ======================================================== */}
       {/* 1. SECTION: VIEW EVENT STATUS (Attendance check-in)       */}
       {/* ======================================================== */}
@@ -745,57 +1038,31 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
           ) : (
             <div>
               {/* Turnout Summary Bar (Progress Div) */}
-              <div
-                style={{
-                  display: 'flex',
-                  gap: '2rem',
-                  padding: '1.25rem 1.75rem',
-                  borderRadius: '16px',
-                  background: 'var(--bg-card)',
-                  border: '1px solid rgba(212, 175, 55, 0.15)',
-                  boxShadow: 'var(--neu-shadow-flat)',
-                  marginBottom: '1.5rem',
-                  flexWrap: 'wrap',
-                }}
-              >
+              <div className="responsive-stat-bar">
                 <div>
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Total Registered</div>
                   <div className="font-mono" style={{ fontSize: '1.5rem', fontWeight: '800', color: 'var(--text-white)' }}>
-                    {registrations.length}
+                    {validRegistrations.length}
                   </div>
                 </div>
 
                 <div>
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Entered Hall</div>
                   <div className="font-mono" style={{ fontSize: '1.5rem', fontWeight: '800', color: '#34D399' }}>
-                    {attendedCount} / {registrations.length} ({registrations.length > 0 ? Math.round((attendedCount / registrations.length) * 100) : 0}%)
+                    {attendedCount} / {validRegistrations.length} ({validRegistrations.length > 0 ? Math.round((attendedCount / validRegistrations.length) * 100) : 0}%)
                   </div>
                 </div>
 
                 <div>
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Pending Check-In</div>
                   <div className="font-mono" style={{ fontSize: '1.5rem', fontWeight: '800', color: 'var(--gold-bright)' }}>
-                    {registrations.length - attendedCount}
+                    {validRegistrations.length - attendedCount}
                   </div>
                 </div>
               </div>
 
               {/* Event Dropdown & Multi-Filter Control Bar (under the progress div) */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  flexWrap: 'wrap',
-                  gap: '1.25rem',
-                  padding: '1.1rem 1.4rem',
-                  borderRadius: '16px',
-                  background: 'var(--bg-card)',
-                  border: '1px solid rgba(212, 175, 55, 0.2)',
-                  boxShadow: 'var(--neu-shadow-flat)',
-                  marginBottom: '1.25rem',
-                }}
-              >
+              <div className="responsive-filter-bar">
                 {/* Event Dropdown Selector (Custom Styled Glass Dropdown) */}
                 <div ref={eventDropdownRef} style={{ position: 'relative', minWidth: '260px', flex: '1 1 280px' }}>
                   <label
@@ -1105,18 +1372,9 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
                     return (
                       <div
                         key={reg.id}
+                        className="attendee-card"
                         style={{
-                          background: 'var(--bg-card)',
-                          borderRadius: '16px',
-                          border: '1px solid rgba(212, 175, 55, 0.2)',
-                          boxShadow: 'var(--neu-shadow-flat)',
-                          padding: '1.25rem 1.5rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: '1.5rem',
                           borderLeft: isPresent ? '4px solid #10B981' : '4px solid rgba(212, 175, 55, 0.4)',
-                          minHeight: '84px',
                         }}
                       >
                         {/* Participant info (left side) */}
@@ -1148,12 +1406,24 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
                                 fontSize: '0.7rem',
                                 padding: '0.15rem 0.5rem',
                                 borderRadius: '6px',
-                                background: reg.payment_mode === 'OFFLINE' ? 'rgba(212, 175, 55, 0.15)' : 'rgba(59, 130, 246, 0.15)',
-                                color: reg.payment_mode === 'OFFLINE' ? 'var(--gold-bright)' : '#60A5FA',
+                                background:
+                                  reg.payment_status === 'SUCCESS'
+                                    ? (reg.payment_mode === 'OFFLINE' ? 'rgba(212, 175, 55, 0.15)' : 'rgba(16, 185, 129, 0.15)')
+                                    : 'rgba(245, 158, 11, 0.15)',
+                                color:
+                                  reg.payment_status === 'SUCCESS'
+                                    ? (reg.payment_mode === 'OFFLINE' ? 'var(--gold-bright)' : '#10B981')
+                                    : '#F59E0B',
+                                border:
+                                  reg.payment_status === 'SUCCESS'
+                                    ? (reg.payment_mode === 'OFFLINE' ? '1px solid rgba(212, 175, 55, 0.3)' : '1px solid rgba(16, 185, 129, 0.3)')
+                                    : '1px solid rgba(245, 158, 11, 0.35)',
                                 fontWeight: '700',
                               }}
                             >
-                              {reg.payment_mode === 'OFFLINE' ? '💵 Cash / Offline' : '💳 Online'}
+                              {reg.payment_status === 'SUCCESS'
+                                ? (reg.payment_mode === 'OFFLINE' ? '✓ Paid (Cash)' : '✓ Paid (Online)')
+                                : '⏳ Unpaid / Pending'}
                             </span>
                           </div>
 
@@ -1164,17 +1434,8 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
                           </div>
                         </div>
 
-                        {/* Action Buttons: Fixed width container and fixed button sizes for perfect vertical alignment across cards */}
-                        <div
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.75rem',
-                            flexShrink: 0,
-                            width: '240px',
-                            justifyContent: 'flex-end',
-                          }}
-                        >
+                        {/* Action Buttons: Fixed width container on desktop, stacked grid on mobile */}
+                        <div className="attendee-card-actions">
                           {/* Details Button */}
                           <button
                             onClick={async () => {
@@ -1206,7 +1467,7 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
                           */}
                           <button
                             onClick={() => handleToggleAttendance(reg)}
-                            disabled={updatingId === reg.id || (isPresent && !isAdmin)}
+                            disabled={updatingId === reg.id || (isPresent && !isAdmin) || (reg.payment_status && reg.payment_status !== 'SUCCESS')}
                             className={isPresent ? 'neu-btn' : 'neu-btn-gold'}
                             title={isPresent && isAdmin ? 'Click to revert check-in' : undefined}
                             style={{
@@ -1270,13 +1531,13 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
               No events available for registration.
             </div>
           ) : (
-            <div style={{ background: 'var(--bg-card)', borderRadius: '24px', border: '1px solid rgba(212, 175, 55, 0.25)', padding: '2rem', boxShadow: 'var(--neu-shadow-flat)' }}>
+            <div className="volunteer-form-card" style={{ background: 'var(--bg-card)', borderRadius: '24px', border: '1px solid rgba(212, 175, 55, 0.25)', padding: '2rem', boxShadow: 'var(--neu-shadow-flat)' }}>
               <form onSubmit={handleManualSubmit}>
                 {/* Horizontal 2-Column Form Layout: Minimizes vertical scrolling */}
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))',
                     gap: '2.5rem',
                     alignItems: 'start',
                   }}
@@ -1469,7 +1730,7 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
                       <label style={{ fontSize: '0.72rem', fontWeight: '700', color: 'var(--gold-bright)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.4rem', display: 'block' }}>
                         Payment Mode *
                       </label>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 140px), 1fr))', gap: '0.85rem' }}>
                         <div
                           onClick={() => setManualPaymentMode('OFFLINE')}
                           style={{
@@ -1560,7 +1821,7 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
                   {/* Right Column: Participant Details & Teammates */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                     {/* Primary details in compact 2-column grid */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', gap: '0.85rem' }}>
                       <div>
                         <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.3rem', display: 'block' }}>
                           Participant Name *
@@ -1582,9 +1843,12 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
                         </label>
                         <input
                           type="tel"
-                          placeholder="10-digit phone"
+                          inputMode="numeric"
+                          pattern="[0-9]{10}"
+                          maxLength={10}
+                          placeholder="10-digit mobile"
                           value={manualForm.primary_phone}
-                          onChange={(e) => setManualForm({ ...manualForm, primary_phone: e.target.value })}
+                          onChange={(e) => setManualForm({ ...manualForm, primary_phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
                           className="neu-input"
                           style={{ padding: '0.65rem 0.95rem', fontSize: '0.85rem' }}
                           required
@@ -1592,7 +1856,7 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
                       </div>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', gap: '0.85rem' }}>
                       <div>
                         <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.3rem', display: 'block' }}>
                           Email Address *
@@ -1624,14 +1888,14 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
                       </div>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: isManualTeam ? '1fr 1fr' : '1fr', gap: '0.85rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: isManualTeam ? 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))' : '1fr', gap: '0.85rem' }}>
                       <div>
                         <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.3rem', display: 'block' }}>
-                          Course and Semester *
+                          Semester *
                         </label>
                         <input
                           type="text"
-                          placeholder="e.g. B.Tech CSE, Sem 6"
+                          placeholder="e.g. Semester 6"
                           value={manualForm.course_and_semester}
                           onChange={(e) => setManualForm({ ...manualForm, course_and_semester: e.target.value })}
                           className="neu-input"
@@ -1661,15 +1925,10 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
                     {/* Teammates if group event */}
                     {isManualTeam && (
                       <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.75rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                        <div style={{ marginBottom: '0.5rem' }}>
                           <span style={{ fontSize: '0.78rem', fontWeight: '700', color: 'var(--gold-bright)' }}>
                             Teammates ({1 + manualForm.team_members.length} / {currentSelectedManualEvent?.max_team_size})
                           </span>
-                          {1 + manualForm.team_members.length < (currentSelectedManualEvent?.max_team_size || 1) && (
-                            <button type="button" onClick={handleManualAddTeammate} className="glass-btn" style={{ fontSize: '0.72rem', padding: '0.3rem 0.65rem' }}>
-                              + Add Teammate
-                            </button>
-                          )}
                         </div>
 
                         {manualForm.team_members.map((tm, idx) => (
@@ -1701,9 +1960,12 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
                               />
                               <input
                                 type="tel"
-                                placeholder="Phone"
+                                inputMode="numeric"
+                                pattern="[0-9]{10}"
+                                maxLength={10}
+                                placeholder="10-digit phone"
                                 value={tm.phone}
-                                onChange={(e) => handleManualTeammateChange(idx, 'phone', e.target.value)}
+                                onChange={(e) => handleManualTeammateChange(idx, 'phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
                                 className="neu-input"
                                 style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem' }}
                                 required
@@ -1711,6 +1973,31 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
                             </div>
                           </div>
                         ))}
+
+                        {1 + manualForm.team_members.length < (currentSelectedManualEvent?.max_team_size || 1) && (
+                          <button
+                            type="button"
+                            onClick={handleManualAddTeammate}
+                            className="glass-btn"
+                            style={{
+                              width: '100%',
+                              fontSize: '0.78rem',
+                              padding: '0.55rem',
+                              borderRadius: '8px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '0.35rem',
+                              border: '1px dashed rgba(212, 175, 55, 0.4)',
+                              color: 'var(--gold-bright)',
+                              cursor: 'pointer',
+                              marginBottom: '0.5rem',
+                            }}
+                          >
+                            <Plus size={14} />
+                            <span>Add Teammate</span>
+                          </button>
+                        )}
                       </div>
                     )}
 
@@ -1986,6 +2273,43 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
               </select>
             </div>
 
+            {/* Payment Status Filter */}
+            <div style={{ flex: '1 1 180px' }}>
+              <label style={{ fontSize: '0.72rem', fontWeight: '600', color: 'var(--gold-bright)', display: 'block', marginBottom: '0.35rem', letterSpacing: '0.04em' }}>
+                Payment Status
+              </label>
+              <select
+                value={participantFilterPaymentStatus}
+                onChange={(e) => setParticipantFilterPaymentStatus(e.target.value)}
+                style={{
+                  width: '100%',
+                  height: '42px',
+                  background: '#0d0d16',
+                  border: '1px solid rgba(212, 175, 55, 0.35)',
+                  borderRadius: '12px',
+                  padding: '0.55rem 2.2rem 0.55rem 0.85rem',
+                  fontSize: '0.82rem',
+                  fontWeight: '600',
+                  color: 'var(--text-white)',
+                  appearance: 'none',
+                  WebkitAppearance: 'none',
+                  MozAppearance: 'none',
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23D4AF37' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 0.75rem center',
+                  backgroundSize: '15px',
+                  outline: 'none',
+                  boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
+                  cursor: 'pointer',
+                }}
+              >
+                <option value="SUCCESS" style={{ background: '#0d0d16', color: '#10B981', fontWeight: '700' }}>✓ Confirmed (Paid)</option>
+                <option value="ALL" style={{ background: '#0d0d16', color: '#f3f4f6' }}>All Statuses</option>
+                <option value="PENDING" style={{ background: '#0d0d16', color: '#F59E0B' }}>⏳ Payment Pending</option>
+                <option value="FAILED" style={{ background: '#0d0d16', color: '#EF4444' }}>✕ Payment Failed</option>
+              </select>
+            </div>
+
             {/* Search Input */}
             <div style={{ flex: '2 1 240px' }}>
               <label style={{ fontSize: '0.72rem', fontWeight: '600', color: 'var(--gold-bright)', display: 'block', marginBottom: '0.35rem', letterSpacing: '0.04em' }}>
@@ -2028,16 +2352,8 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
                 return (
                   <div
                     key={reg.id}
+                    className="admin-participant-card"
                     style={{
-                      background: 'var(--bg-card)',
-                      borderRadius: '16px',
-                      border: '1px solid rgba(212, 175, 55, 0.2)',
-                      padding: '1.15rem 1.4rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      flexWrap: 'wrap',
-                      gap: '1rem',
                       borderLeft: isHidden
                         ? '4px solid #6B7280'
                         : isPresent
@@ -2059,14 +2375,34 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
                         <span
                           style={{
                             fontSize: '0.7rem',
-                            padding: '0.15rem 0.45rem',
+                            padding: '0.15rem 0.5rem',
                             borderRadius: '6px',
-                            background: reg.payment_mode === 'OFFLINE' ? 'rgba(212, 175, 55, 0.15)' : 'rgba(59, 130, 246, 0.15)',
-                            color: reg.payment_mode === 'OFFLINE' ? 'var(--gold-bright)' : '#60A5FA',
+                            background:
+                              reg.payment_status === 'SUCCESS'
+                                ? (reg.payment_mode === 'OFFLINE' ? 'rgba(212, 175, 55, 0.15)' : 'rgba(16, 185, 129, 0.15)')
+                                : reg.payment_status === 'PENDING'
+                                ? 'rgba(245, 158, 11, 0.15)'
+                                : 'rgba(239, 68, 68, 0.15)',
+                            color:
+                              reg.payment_status === 'SUCCESS'
+                                ? (reg.payment_mode === 'OFFLINE' ? 'var(--gold-bright)' : '#10B981')
+                                : reg.payment_status === 'PENDING'
+                                ? '#F59E0B'
+                                : '#EF4444',
+                            border:
+                              reg.payment_status === 'SUCCESS'
+                                ? (reg.payment_mode === 'OFFLINE' ? '1px solid rgba(212, 175, 55, 0.3)' : '1px solid rgba(16, 185, 129, 0.3)')
+                                : reg.payment_status === 'PENDING'
+                                ? '1px solid rgba(245, 158, 11, 0.35)'
+                                : '1px solid rgba(239, 68, 68, 0.35)',
                             fontWeight: '700',
                           }}
                         >
-                          {reg.payment_mode === 'OFFLINE' ? 'Cash' : 'Online'}
+                          {reg.payment_status === 'SUCCESS'
+                            ? (reg.payment_mode === 'OFFLINE' ? '✓ Cash (Paid)' : '✓ Online (Paid)')
+                            : reg.payment_status === 'PENDING'
+                            ? '⏳ Unpaid / Pending'
+                            : '✕ Payment Failed'}
                         </span>
                         {isHidden && (
                           <span
@@ -2094,7 +2430,7 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                    <div className="admin-participant-actions">
                       <button
                         onClick={async () => {
                           const full = await api.getRegistration(reg.id);
@@ -2202,61 +2538,131 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
             </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.5rem' }}>
-            {allEvents.map((ev) => (
-              <div
-                key={ev.id}
-                style={{
-                  background: 'var(--bg-card)',
-                  borderRadius: '20px',
-                  border: '1px solid rgba(212, 175, 55, 0.2)',
-                  padding: '1.5rem',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                  boxShadow: 'var(--neu-shadow-flat)',
-                }}
-              >
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-                    <h3 className="font-display gold-text" style={{ fontSize: '1.3rem', fontWeight: '700' }}>
-                      {ev.title}
-                    </h3>
-                    <span className="font-mono" style={{ fontSize: '1.1rem', fontWeight: '800', color: 'var(--gold-bright)' }}>
-                      ₹{parseFloat(ev.registration_fee || 0).toFixed(0)}
-                    </span>
+          {allEvents.length === 0 && !adminEventsLoading ? (
+            <div style={{ padding: '3rem', textAlign: 'center', background: 'var(--bg-card)', borderRadius: '16px', color: 'var(--text-secondary)' }}>
+              No events created yet. Click "Create Event" above to create your first competition.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.5rem' }}>
+              {allEvents.map((ev) => {
+              const isDeactivated = ev.is_active === false;
+              return (
+                <div
+                  key={ev.id}
+                  style={{
+                    background: 'var(--bg-card)',
+                    borderRadius: '20px',
+                    border: isDeactivated ? '1px dashed rgba(255, 255, 255, 0.15)' : '1px solid rgba(212, 175, 55, 0.2)',
+                    padding: '1.5rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    boxShadow: isDeactivated ? 'none' : 'var(--neu-shadow-flat)',
+                    opacity: isDeactivated ? 0.55 : 1,
+                    filter: isDeactivated ? 'grayscale(0.4)' : 'none',
+                    transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem', gap: '0.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <h3 className="font-display gold-text" style={{ fontSize: '1.3rem', fontWeight: '700', color: isDeactivated ? '#9CA3AF' : undefined }}>
+                          {ev.title}
+                        </h3>
+                        {isDeactivated && (
+                          <span
+                            style={{
+                              fontSize: '0.68rem',
+                              padding: '0.15rem 0.5rem',
+                              borderRadius: '6px',
+                              background: 'rgba(239, 68, 68, 0.15)',
+                              border: '1px solid rgba(239, 68, 68, 0.35)',
+                              color: '#F87171',
+                              fontWeight: '700',
+                              letterSpacing: '0.04em',
+                              textTransform: 'uppercase',
+                            }}
+                          >
+                            Deactivated
+                          </span>
+                        )}
+                      </div>
+                      <span className="font-mono" style={{ fontSize: '1.1rem', fontWeight: '800', color: isDeactivated ? '#9CA3AF' : 'var(--gold-bright)' }}>
+                        ₹{parseFloat(ev.registration_fee || 0).toFixed(0)}
+                      </span>
+                    </div>
+
+                    <p style={{ fontSize: '0.85rem', color: isDeactivated ? '#6B7280' : 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '1rem' }}>
+                      {ev.description}
+                    </p>
+
+                    <div style={{ fontSize: '0.78rem', color: isDeactivated ? '#6B7280' : 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '0.35rem', marginBottom: '1.25rem' }}>
+                      <div>📍 {ev.venue || 'Main Venue'}</div>
+                      <div>🕒 {ev.start_time || '10:00 AM'} - {ev.end_time || '01:00 PM'}</div>
+                      <div>👥 {ev.event_type} {ev.event_type === 'TEAM' && `(${ev.min_team_size}-${ev.max_team_size} members)`}</div>
+                      {ev.rules && (
+                        <div style={{ color: isDeactivated ? '#6B7280' : 'var(--gold-light)', fontStyle: 'italic' }}>
+                          📜 Rules added ({ev.rules.length} chars)
+                        </div>
+                      )}
+                    </div>
                   </div>
 
-                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '1rem' }}>
-                    {ev.description}
-                  </p>
-
-                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '0.35rem', marginBottom: '1.25rem' }}>
-                    <div>📍 {ev.venue || 'Main Venue'}</div>
-                    <div>🕒 {ev.start_time || '10:00 AM'} - {ev.end_time || '01:00 PM'}</div>
-                    <div>👥 {ev.event_type} {ev.event_type === 'TEAM' && `(${ev.min_team_size}-${ev.max_team_size} members)`}</div>
-                    {ev.rules && (
-                      <div style={{ color: 'var(--gold-light)', fontStyle: 'italic' }}>
-                        📜 Rules added ({ev.rules.length} chars)
-                      </div>
+                  <div style={{ display: 'flex', gap: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <button onClick={() => handleOpenAssignModal(ev)} className="neu-btn" style={{ fontSize: '0.75rem', padding: '0.45rem 0.85rem' }}>
+                      Assign Volunteers
+                    </button>
+                    <button onClick={() => handleOpenEditEvent(ev)} className="neu-btn" style={{ fontSize: '0.75rem', padding: '0.45rem 0.85rem' }}>
+                      <Edit2 size={13} /> Edit
+                    </button>
+                    {isDeactivated ? (
+                      <button
+                        onClick={() => handleToggleEventActive(ev)}
+                        className="neu-btn"
+                        style={{
+                          fontSize: '0.75rem',
+                          padding: '0.45rem 0.95rem',
+                          background: 'rgba(16, 185, 129, 0.2)',
+                          borderColor: '#10B981',
+                          color: '#34D399',
+                          fontWeight: '700',
+                          boxShadow: '0 0 12px rgba(16, 185, 129, 0.3)',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                          opacity: 1,
+                        }}
+                        title="Click to activate this event"
+                      >
+                        <CheckCircle size={13} color="#34D399" /> Activate
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleToggleEventActive(ev)}
+                        className="neu-btn"
+                        style={{
+                          fontSize: '0.75rem',
+                          padding: '0.45rem 0.85rem',
+                          color: '#EF4444',
+                          borderColor: 'rgba(239, 68, 68, 0.4)',
+                          background: 'rgba(239, 68, 68, 0.08)',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                        }}
+                        title="Click to deactivate this event"
+                      >
+                        <Trash2 size={13} /> Deactivate
+                      </button>
                     )}
                   </div>
                 </div>
-
-                <div style={{ display: 'flex', gap: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '1rem', flexWrap: 'wrap' }}>
-                  <button onClick={() => handleOpenAssignModal(ev)} className="neu-btn" style={{ fontSize: '0.75rem', padding: '0.45rem 0.85rem' }}>
-                    Assign Volunteers
-                  </button>
-                  <button onClick={() => handleOpenEditEvent(ev)} className="neu-btn" style={{ fontSize: '0.75rem', padding: '0.45rem 0.85rem' }}>
-                    <Edit2 size={13} /> Edit
-                  </button>
-                  <button onClick={() => handleDeleteEvent(ev.id)} className="neu-btn" style={{ fontSize: '0.75rem', padding: '0.45rem 0.85rem', color: '#EF4444' }}>
-                    <Trash2 size={13} /> Deactivate
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
+        )}
         </div>
       )}
 
@@ -2414,9 +2820,12 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
                 <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.3rem', display: 'block' }}>Phone Number</label>
                 <input
                   type="tel"
-                  placeholder="Phone"
+                  inputMode="numeric"
+                  pattern="[0-9]{10}"
+                  maxLength={10}
+                  placeholder="10-digit phone"
                   value={newVolForm.phone}
-                  onChange={(e) => setNewVolForm({ ...newVolForm, phone: e.target.value })}
+                  onChange={(e) => setNewVolForm({ ...newVolForm, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
                   className="neu-input"
                 />
               </div>
@@ -2608,6 +3017,110 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
               </button>
             </form>
           </div>
+
+          {/* Admin Credentials Form Card */}
+          <div
+            style={{
+              background: 'var(--bg-card)',
+              borderRadius: '20px',
+              border: '1px solid rgba(212, 175, 55, 0.25)',
+              padding: '2rem',
+              boxShadow: 'var(--neu-shadow-flat)',
+              marginTop: '2rem',
+            }}
+          >
+            <div style={{ marginBottom: '1.5rem' }}>
+              <div
+                style={{
+                  fontSize: '0.72rem',
+                  fontWeight: '700',
+                  color: 'var(--gold-bright)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.12em',
+                }}
+              >
+                Security & Authentication
+              </div>
+              <h2
+                className="font-display gold-text-glow"
+                style={{ fontSize: '1.4rem', fontWeight: '800', marginTop: '0.2rem' }}
+              >
+                Change Admin Credentials
+              </h2>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: '0.25rem' }}>
+                Update your administrative login username and password.
+              </p>
+            </div>
+
+            <form
+              onSubmit={handleChangeAdminCredentials}
+              style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}
+            >
+              <div>
+                <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.3rem' }}>
+                  Admin Username
+                </label>
+                <input
+                  type="text"
+                  value={adminCredForm.username}
+                  onChange={(e) => setAdminCredForm({ ...adminCredForm, username: e.target.value })}
+                  placeholder="admin"
+                  className="neu-input"
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.3rem' }}>
+                    New Password
+                  </label>
+                  <input
+                    type="password"
+                    value={adminCredForm.newPassword}
+                    onChange={(e) => setAdminCredForm({ ...adminCredForm, newPassword: e.target.value })}
+                    placeholder="Leave blank to keep unchanged"
+                    className="neu-input"
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.3rem' }}>
+                    Confirm New Password
+                  </label>
+                  <input
+                    type="password"
+                    value={adminCredForm.confirmPassword}
+                    onChange={(e) => setAdminCredForm({ ...adminCredForm, confirmPassword: e.target.value })}
+                    placeholder="Confirm new password"
+                    className="neu-input"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.3rem' }}>
+                  Current Password (required when changing password)
+                </label>
+                <input
+                  type="password"
+                  value={adminCredForm.currentPassword}
+                  onChange={(e) => setAdminCredForm({ ...adminCredForm, currentPassword: e.target.value })}
+                  placeholder="••••••••"
+                  className="neu-input"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={credUpdating}
+                className="neu-btn-gold"
+                style={{ marginTop: '0.5rem', padding: '0.85rem' }}
+              >
+                {credUpdating ? 'Updating Credentials...' : 'Update Admin Credentials'}
+              </button>
+            </form>
+          </div>
         </div>
       )}
 
@@ -2616,30 +3129,14 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
       {/* ======================================================== */}
       {createEventModal && (
         <div
+          className="responsive-modal-overlay"
           onClick={() => setCreateEventModal(false)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(3,3,5,0.85)',
-            backdropFilter: 'blur(10px)',
-            zIndex: 1000,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '1.5rem',
-          }}
         >
           <div
+            className="responsive-modal-card"
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: 'var(--bg-card)',
-              borderRadius: '24px',
-              border: '1px solid rgba(212, 175, 55, 0.3)',
               maxWidth: '620px',
-              width: '100%',
-              padding: '2rem',
-              maxHeight: '90vh',
-              overflowY: 'auto',
             }}
           >
             <h3 className="font-display gold-text" style={{ fontSize: '1.5rem', marginBottom: '1.25rem' }}>
@@ -2812,27 +3309,14 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
       {/* ======================================================== */}
       {assignModalOpen && selectedEventForAssign && (
         <div
+          className="responsive-modal-overlay"
           onClick={() => setAssignModalOpen(false)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(3,3,5,0.85)',
-            zIndex: 1000,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '1.5rem',
-          }}
         >
           <div
+            className="responsive-modal-card"
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: 'var(--bg-card)',
-              borderRadius: '20px',
-              border: '1px solid rgba(212, 175, 55, 0.3)',
               maxWidth: '460px',
-              width: '100%',
-              padding: '2rem',
             }}
           >
             <h3 className="font-display gold-text" style={{ fontSize: '1.3rem', marginBottom: '0.5rem' }}>
@@ -2895,28 +3379,14 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
       {/* ======================================================== */}
       {inspectRegistration && (
         <div
+          className="responsive-modal-overlay"
           onClick={() => setInspectRegistration(null)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(3,3,5,0.85)',
-            backdropFilter: 'blur(10px)',
-            zIndex: 1000,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '1.5rem',
-          }}
         >
           <div
+            className="responsive-modal-card"
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: 'var(--bg-card)',
-              borderRadius: '24px',
-              border: '1px solid rgba(212, 175, 55, 0.3)',
               maxWidth: '540px',
-              width: '100%',
-              padding: '2.25rem',
             }}
           >
             <h3 className="font-display gold-text" style={{ fontSize: '1.4rem', marginBottom: '1rem' }}>
@@ -2933,12 +3403,32 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
                     fontSize: '0.75rem',
                     padding: '0.2rem 0.5rem',
                     borderRadius: '6px',
-                    background: inspectRegistration.payment_mode === 'OFFLINE' ? 'rgba(212, 175, 55, 0.15)' : 'rgba(59, 130, 246, 0.15)',
-                    color: inspectRegistration.payment_mode === 'OFFLINE' ? 'var(--gold-bright)' : '#60A5FA',
+                    background:
+                      inspectRegistration.payment_status === 'SUCCESS'
+                        ? (inspectRegistration.payment_mode === 'OFFLINE' ? 'rgba(212, 175, 55, 0.15)' : 'rgba(16, 185, 129, 0.15)')
+                        : inspectRegistration.payment_status === 'PENDING'
+                        ? 'rgba(245, 158, 11, 0.15)'
+                        : 'rgba(239, 68, 68, 0.15)',
+                    color:
+                      inspectRegistration.payment_status === 'SUCCESS'
+                        ? (inspectRegistration.payment_mode === 'OFFLINE' ? 'var(--gold-bright)' : '#10B981')
+                        : inspectRegistration.payment_status === 'PENDING'
+                        ? '#F59E0B'
+                        : '#EF4444',
+                    border:
+                      inspectRegistration.payment_status === 'SUCCESS'
+                        ? (inspectRegistration.payment_mode === 'OFFLINE' ? '1px solid rgba(212, 175, 55, 0.3)' : '1px solid rgba(16, 185, 129, 0.3)')
+                        : inspectRegistration.payment_status === 'PENDING'
+                        ? '1px solid rgba(245, 158, 11, 0.35)'
+                        : '1px solid rgba(239, 68, 68, 0.35)',
                     fontWeight: '700',
                   }}
                 >
-                  {inspectRegistration.payment_mode === 'OFFLINE' ? 'Cash Payment' : 'Online Gateway'}
+                  {inspectRegistration.payment_status === 'SUCCESS'
+                    ? (inspectRegistration.payment_mode === 'OFFLINE' ? '✓ Cash Payment (Confirmed)' : '✓ Online Gateway (Confirmed)')
+                    : inspectRegistration.payment_status === 'PENDING'
+                    ? '⏳ Payment Pending'
+                    : '✕ Payment Failed'}
                 </span>
               </div>
 
@@ -2984,5 +3474,6 @@ export default function VolunteerPortal({ activeSection = 'status' }) {
         </div>
       )}
     </div>
+    </>
   );
 }

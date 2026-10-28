@@ -8,17 +8,31 @@ logger = logging.getLogger(__name__)
 
 
 class CashfreeService:
-    def __init__(self):
-        self.app_id = settings.CASHFREE_APP_ID
-        self.secret_key = settings.CASHFREE_SECRET_KEY
-        self.api_version = settings.CASHFREE_API_VERSION
-        self.is_sandbox = settings.CASHFREE_ENVIRONMENT.upper() == "SANDBOX"
-        
-        self.base_url = (
-            "https://sandbox.cashfree.com/pg"
-            if self.is_sandbox
-            else "https://api.cashfree.com/pg"
-        )
+    @property
+    def app_id(self) -> str:
+        return settings.CASHFREE_APP_ID.strip('\'"')
+
+    @property
+    def secret_key(self) -> str:
+        return settings.CASHFREE_SECRET_KEY.strip('\'"')
+
+    @property
+    def api_version(self) -> str:
+        return settings.CASHFREE_API_VERSION.strip('\'"')
+
+    @property
+    def is_sandbox(self) -> bool:
+        if self.secret_key.startswith("cfsk_ma_prod_") or settings.CASHFREE_ENVIRONMENT.upper() == "PRODUCTION":
+            return False
+        return True
+
+    @property
+    def base_url(self) -> str:
+        return "https://sandbox.cashfree.com/pg" if self.is_sandbox else "https://api.cashfree.com/pg"
+
+    @property
+    def env_mode(self) -> str:
+        return "sandbox" if self.is_sandbox else "production"
 
     def _get_headers(self) -> Dict[str, str]:
         return {
@@ -46,6 +60,10 @@ class CashfreeService:
         if return_url is None:
             return_url = settings.CASHFREE_RETURN_URL
 
+        # Cashfree production strictly mandates an https:// return URL
+        if not self.is_sandbox and return_url.startswith("http://"):
+            return_url = return_url.replace("http://", "https://", 1)
+
         payload = {
             "order_id": order_id,
             "order_amount": float(order_amount),
@@ -58,6 +76,7 @@ class CashfreeService:
             },
             "order_meta": {
                 "return_url": return_url,
+                **({"notify_url": settings.CASHFREE_NOTIFY_URL} if settings.CASHFREE_NOTIFY_URL else {}),
             },
             "order_note": f"Fest Registration {order_id}",
         }
@@ -73,6 +92,7 @@ class CashfreeService:
                 "order_amount": order_amount,
                 "order_currency": "INR",
                 "is_mock": True,
+                "environment": self.env_mode,
             }
 
         try:
@@ -84,6 +104,8 @@ class CashfreeService:
                 )
                 response.raise_for_status()
                 data = response.json()
+                data["is_mock"] = False
+                data["environment"] = self.env_mode
                 return data
         except httpx.HTTPStatusError as exc:
             logger.error(f"Cashfree create order error: {exc.response.text}")
@@ -117,5 +139,24 @@ class CashfreeService:
             logger.error(f"Failed to fetch Cashfree order {order_id}: {str(exc)}")
             raise Exception(f"Unable to fetch order status from Cashfree: {str(exc)}")
 
+    async def get_order_payments(self, order_id: str) -> list:
+        """Fetch individual payment attempts for an order from Cashfree."""
+        if self.app_id.startswith("TEST_CASHFREE") or not self.app_id:
+            return []
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(
+                    f"{self.base_url}/orders/{order_id}/payments",
+                    headers=self._get_headers(),
+                )
+                if response.status_code == 200:
+                    return response.json()
+                return []
+        except Exception as exc:
+            logger.warning(f"Could not fetch payments for order {order_id}: {str(exc)}")
+            return []
+
 
 cashfree_service = CashfreeService()
+

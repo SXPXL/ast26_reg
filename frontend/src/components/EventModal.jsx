@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { api } from '../services/api';
 import DigitalTicketPass from './DigitalTicketPass';
+import LoadingOverlay from './LoadingOverlay';
 import { useToast } from '../context/ToastContext';
 import {
   Clock,
@@ -28,22 +29,39 @@ export default function EventModal({ event, onClose, onRegistered }) {
   const fee = parseFloat(event.registration_fee || 0);
   const hasRules = Boolean(event.rules && event.rules.trim().length > 0);
 
+  // Check for previously saved draft (e.g. from failed payment retry)
+  const savedDraft = (() => {
+    try {
+      const raw = sessionStorage.getItem(`event_form_${event.id}`);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  })();
+
+  const [restoredNotice, setRestoredNotice] = useState(Boolean(savedDraft?.formData));
+
   // Steps: 'rules' | 'form' | 'confirm' | 'ticket'
-  const [step, setStep] = useState(hasRules ? 'rules' : 'form');
+  const [step, setStep] = useState(() => {
+    if (savedDraft?.step) return savedDraft.step;
+    return hasRules ? 'rules' : 'form';
+  });
   const [ticketData, setTicketData] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
-  // Form State with separate course and semester
-  const [formData, setFormData] = useState({
-    primary_name: '',
-    primary_email: '',
-    primary_phone: '',
-    college_name: '',
-    department: '',
-    course: '',
-    semester: '',
-    team_members: [], // [{ full_name, email, phone, college_name, department, course, semester, same_college, same_dept, same_course, same_sem }]
+  // Form State with separate department and semester (course removed)
+  const [formData, setFormData] = useState(() => {
+    if (savedDraft?.formData) return savedDraft.formData;
+    return {
+      primary_name: '',
+      primary_email: '',
+      primary_phone: '',
+      college_name: '',
+      department: '',
+      semester: '',
+      team_members: [], // [{ full_name, email, phone, college_name, department, semester, same_college, same_dept, same_sem }]
+    };
   });
 
   const handleAddTeammate = () => {
@@ -62,11 +80,9 @@ export default function EventModal({ event, onClose, onRegistered }) {
           phone: '',
           college_name: formData.college_name,
           department: formData.department,
-          course: formData.course,
           semester: formData.semester,
           same_college: true,
           same_dept: true,
-          same_course: true,
           same_sem: true,
         },
       ],
@@ -112,13 +128,25 @@ export default function EventModal({ event, onClose, onRegistered }) {
         setError(`This team event requires at least ${event.min_team_size} members.`);
         return;
       }
+
       for (let i = 0; i < formData.team_members.length; i++) {
         const tm = formData.team_members[i];
-        if (!tm.full_name.trim() || !tm.email.trim() || !tm.phone.trim()) {
-          setError(`Please fill in required contact details for Teammate #${i + 1}.`);
+        const tmPhoneClean = tm.phone.replace(/\D/g, '');
+        if (!tm.full_name.trim() || !tm.email.trim() || tmPhoneClean.length < 10) {
+          setError(`Please enter a valid 10-digit mobile number for Teammate #${i + 1}.`);
           return;
         }
       }
+    }
+
+    // Persist form draft in sessionStorage so user never loses their data
+    try {
+      sessionStorage.setItem(`event_form_${event.id}`, JSON.stringify({
+        formData,
+        step: 'confirm',
+      }));
+    } catch (e) {
+      console.warn('Could not cache session storage:', e);
     }
 
     setStep('confirm');
@@ -134,7 +162,6 @@ export default function EventModal({ event, onClose, onRegistered }) {
         ? formData.team_members.map((m) => {
             const college = m.same_college ? formData.college_name : (m.college_name || formData.college_name);
             const dept = m.same_dept ? formData.department : (m.department || formData.department);
-            const crs = m.same_course ? formData.course : (m.course || formData.course);
             const sem = m.same_sem ? formData.semester : (m.semester || formData.semester);
 
             return {
@@ -143,12 +170,12 @@ export default function EventModal({ event, onClose, onRegistered }) {
               phone: m.phone.trim(),
               college_name: college.trim(),
               department: dept.trim(),
-              course_and_semester: `${crs.trim()}, ${sem.trim()}`.replace(/^,\s*|,\s*$/g, ''),
+              course_and_semester: sem.trim(),
             };
           })
         : [];
 
-      const primaryCourseSem = `${formData.course.trim()}, ${formData.semester.trim()}`.replace(/^,\s*|,\s*$/g, '');
+      const primarySem = formData.semester.trim();
 
       const payload = {
         event_id: event.id,
@@ -157,25 +184,47 @@ export default function EventModal({ event, onClose, onRegistered }) {
         primary_phone: formData.primary_phone.trim(),
         college_name: formData.college_name.trim(),
         department: formData.department.trim() || 'General',
-        course_and_semester: primaryCourseSem,
-        year_of_study: formData.semester.trim() || '1st Year',
+        course_and_semester: primarySem,
+        year_of_study: primarySem || '1st Year',
         team_members: formattedTeammates,
         payment_mode: 'ONLINE',
       };
 
       const result = await api.createRegistration(payload);
 
-      // Verify payment order if active
-      if (result.payment_status === 'PENDING' && result.payment_session) {
+      // Handle Cashfree Payment Gateway checkout if payment is pending
+      if (result.payment_status === 'PENDING' && result.payment_session?.payment_session_id) {
+        const sessionId = result.payment_session.payment_session_id;
+        const orderId = result.payment_session.order_id;
+        const envMode = result.payment_session.environment === 'production' ? 'production' : 'sandbox';
+        const fee = event.registration_fee || result.total_amount || 0;
+
+        // Save registration context and form draft in sessionStorage for retry & status display
         try {
-          const verifyRes = await api.verifyPayment(result.payment_session.order_id);
-          if (verifyRes.success) {
-            result.payment_status = 'SUCCESS';
-          }
-        } catch (vErr) {
-          console.log('Payment check:', vErr);
+          sessionStorage.setItem(`payment_reg_${orderId}`, JSON.stringify({
+            registration_code: result.registration_code,
+            event_title: event.title,
+            event_id: event.id,
+            amount: fee,
+            primary_name: formData.primary_name.trim(),
+            formData: formData,
+          }));
+
+          sessionStorage.setItem(`event_form_${event.id}`, JSON.stringify({
+            formData,
+            step: 'confirm',
+          }));
+        } catch (e) {
+          console.warn('Could not cache session storage:', e);
         }
+
+        // Navigate to dedicated payment opening & processing page with event_id
+        window.location.href = `/payment/process?order_id=${encodeURIComponent(orderId)}&session_id=${encodeURIComponent(sessionId)}&env=${encodeURIComponent(envMode)}&event=${encodeURIComponent(event.title)}&event_id=${encodeURIComponent(event.id)}&amount=${encodeURIComponent(fee)}`;
+        return;
       }
+
+      // If already SUCCESS / free event, clear the draft
+      sessionStorage.removeItem(`event_form_${event.id}`);
 
       // Fetch confirmed digital ticket pass
       const fullTicket = await api.getRegistrationByCode(result.registration_code);
@@ -194,6 +243,7 @@ export default function EventModal({ event, onClose, onRegistered }) {
 
   return (
     <div
+      className="responsive-modal-overlay"
       onClick={onClose}
       style={{
         position: 'fixed',
@@ -209,6 +259,7 @@ export default function EventModal({ event, onClose, onRegistered }) {
       }}
     >
       <div
+        className="responsive-modal-card"
         onClick={(e) => e.stopPropagation()}
         style={{
           background: 'var(--glass-bg)',
@@ -225,6 +276,13 @@ export default function EventModal({ event, onClose, onRegistered }) {
           position: 'relative',
         }}
       >
+        {/* Loading Overlay while waiting for registration API response */}
+        <LoadingOverlay
+          active={submitting}
+          message="Securing Registration..."
+          subtext="Connecting to payment gateway & generating pass..."
+        />
+
         {/* Requirement 7: In the confirmation modal, remove the close option in the top right */}
         {step !== 'confirm' && (
           <button
@@ -404,7 +462,7 @@ export default function EventModal({ event, onClose, onRegistered }) {
                   <span>{isTeam ? 'Participant #1 (Team Lead)' : 'Participant Details'}</span>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.85rem', marginBottom: '0.85rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: '0.85rem', marginBottom: '0.85rem' }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.73rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>
                       Full Name *
@@ -434,16 +492,19 @@ export default function EventModal({ event, onClose, onRegistered }) {
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.85rem', marginBottom: '0.85rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: '0.85rem', marginBottom: '0.85rem' }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.73rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>
                       Phone Number *
                     </label>
                     <input
                       type="tel"
+                      inputMode="numeric"
+                      pattern="[0-9]{10}"
+                      maxLength={10}
                       placeholder="10-digit mobile number"
                       value={formData.primary_phone}
-                      onChange={(e) => setFormData({ ...formData, primary_phone: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, primary_phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
                       className="neu-input"
                       required
                     />
@@ -464,8 +525,8 @@ export default function EventModal({ event, onClose, onRegistered }) {
                   </div>
                 </div>
 
-                {/* Requirement 5: Department, Course and Semester as separate fields */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '0.85rem' }}>
+                {/* Department and Semester fields */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', gap: '0.85rem' }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.73rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>
                       Department *
@@ -475,20 +536,6 @@ export default function EventModal({ event, onClose, onRegistered }) {
                       placeholder="e.g. Computer Science"
                       value={formData.department}
                       onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                      className="neu-input"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.73rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>
-                      Course *
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. B.Tech"
-                      value={formData.course}
-                      onChange={(e) => setFormData({ ...formData, course: e.target.value })}
                       className="neu-input"
                       required
                     />
@@ -513,27 +560,14 @@ export default function EventModal({ event, onClose, onRegistered }) {
               {/* Requirement 6: Team events teammates (Team name removed!) */}
               {isTeam && (
                 <div style={{ marginTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '1.25rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-                    <div>
-                      <div style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--gold-bright)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                        <Users size={15} />
-                        <span>Teammates ({1 + formData.team_members.length} / {event.max_team_size} members)</span>
-                      </div>
-                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
-                        Min {event.min_team_size} required, Max {event.max_team_size}
-                      </div>
+                  <div style={{ marginBottom: '1rem' }}>
+                    <div style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--gold-bright)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <Users size={15} />
+                      <span>Teammates ({1 + formData.team_members.length} / {event.max_team_size} members)</span>
                     </div>
-
-                    {1 + formData.team_members.length < event.max_team_size && (
-                      <button
-                        type="button"
-                        onClick={handleAddTeammate}
-                        className="glass-btn"
-                        style={{ fontSize: '0.75rem', padding: '0.45rem 0.85rem', color: 'var(--gold-bright)' }}
-                      >
-                        <Plus size={14} /> Add Teammate
-                      </button>
-                    )}
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                      Min {event.min_team_size} required, Max {event.max_team_size}
+                    </div>
                   </div>
 
                   {formData.team_members.map((member, index) => (
@@ -589,9 +623,12 @@ export default function EventModal({ event, onClose, onRegistered }) {
                         />
                         <input
                           type="tel"
-                          placeholder="Teammate Phone *"
+                          inputMode="numeric"
+                          pattern="[0-9]{10}"
+                          maxLength={10}
+                          placeholder="10-digit phone *"
                           value={member.phone}
-                          onChange={(e) => handleTeammateChange(index, 'phone', e.target.value)}
+                          onChange={(e) => handleTeammateChange(index, 'phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
                           className="neu-input"
                           required
                         />
@@ -623,8 +660,8 @@ export default function EventModal({ event, onClose, onRegistered }) {
                         />
                       </div>
 
-                      {/* Requirement 5: "Same as above" checkbox for Department, Course & Semester */}
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.75rem' }}>
+                      {/* "Same as above" checkbox for Department & Semester */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', gap: '0.75rem' }}>
                         {/* Department */}
                         <div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
@@ -647,32 +684,6 @@ export default function EventModal({ event, onClose, onRegistered }) {
                             disabled={member.same_dept}
                             className="neu-input"
                             style={{ opacity: member.same_dept ? 0.75 : 1 }}
-                            required
-                          />
-                        </div>
-
-                        {/* Course */}
-                        <div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
-                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Course</span>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.72rem', color: 'var(--gold-bright)', cursor: 'pointer' }}>
-                              <input
-                                type="checkbox"
-                                checked={member.same_course}
-                                onChange={() => handleToggleSame(index, 'same_course', 'course', formData.course)}
-                                style={{ accentColor: 'var(--gold-bright)' }}
-                              />
-                              <span>Same as above</span>
-                            </label>
-                          </div>
-                          <input
-                            type="text"
-                            placeholder="Course"
-                            value={member.same_course ? formData.course : member.course}
-                            onChange={(e) => handleTeammateChange(index, 'course', e.target.value)}
-                            disabled={member.same_course}
-                            className="neu-input"
-                            style={{ opacity: member.same_course ? 0.75 : 1 }}
                             required
                           />
                         </div>
@@ -705,6 +716,43 @@ export default function EventModal({ event, onClose, onRegistered }) {
                       </div>
                     </div>
                   ))}
+
+                  {/* Add Teammate Button directly under teammate details */}
+                  {1 + formData.team_members.length < event.max_team_size && (
+                    <button
+                      type="button"
+                      onClick={handleAddTeammate}
+                      className="glass-btn"
+                      style={{
+                        width: '100%',
+                        padding: '0.8rem 1rem',
+                        borderRadius: '12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.5rem',
+                        fontSize: '0.86rem',
+                        fontWeight: '700',
+                        color: 'var(--gold-bright)',
+                        border: '1px dashed rgba(212, 175, 55, 0.45)',
+                        background: 'rgba(212, 175, 55, 0.05)',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        marginBottom: '0.75rem',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'rgba(212, 175, 55, 0.12)';
+                        e.currentTarget.style.borderColor = 'var(--gold-bright)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'rgba(212, 175, 55, 0.05)';
+                        e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.45)';
+                      }}
+                    >
+                      <Plus size={16} />
+                      <span>Add Teammate</span>
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -780,6 +828,46 @@ export default function EventModal({ event, onClose, onRegistered }) {
               Please do a quick check of what you entered before proceeding to payment.
             </p>
 
+            {restoredNotice && (
+              <div
+                style={{
+                  padding: '0.85rem 1rem',
+                  borderRadius: '12px',
+                  background: 'rgba(212, 175, 55, 0.1)',
+                  border: '1px solid rgba(212, 175, 55, 0.35)',
+                  color: 'var(--gold-bright)',
+                  fontSize: '0.83rem',
+                  marginBottom: '1.25rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '0.5rem',
+                }}
+              >
+                <span>✨ Your previously entered details are saved. Review them below and click Confirm & Pay to try again.</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    try {
+                      sessionStorage.removeItem(`event_form_${event.id}`);
+                    } catch (e) {}
+                    setRestoredNotice(false);
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer',
+                    fontSize: '0.75rem',
+                    textDecoration: 'underline',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  Clear & Reset
+                </button>
+              </div>
+            )}
+
             {error && (
               <div
                 style={{
@@ -850,13 +938,13 @@ export default function EventModal({ event, onClose, onRegistered }) {
                     <div style={{ fontSize: '0.88rem', color: 'var(--text-offwhite)' }}>{formData.department}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Course & Semester</div>
-                    <div style={{ fontSize: '0.88rem', color: 'var(--text-offwhite)' }}>{formData.course}, {formData.semester}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Semester</div>
+                    <div style={{ fontSize: '0.88rem', color: 'var(--text-offwhite)' }}>{formData.semester}</div>
                   </div>
                 </div>
               </div>
 
-              {/* Requirement 8: All details of teammates shown */}
+              {/* All details of teammates shown */}
               {isTeam && formData.team_members.length > 0 && (
                 <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.85rem' }}>
                   <div style={{ fontSize: '0.72rem', color: 'var(--gold-bright)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.65rem' }}>
@@ -866,7 +954,6 @@ export default function EventModal({ event, onClose, onRegistered }) {
                     {formData.team_members.map((tm, idx) => {
                       const college = tm.same_college ? formData.college_name : tm.college_name;
                       const dept = tm.same_dept ? formData.department : tm.department;
-                      const crs = tm.same_course ? formData.course : tm.course;
                       const sem = tm.same_sem ? formData.semester : tm.semester;
 
                       return (
@@ -891,7 +978,7 @@ export default function EventModal({ event, onClose, onRegistered }) {
                             <div>✉️ {tm.email}</div>
                             <div>🏫 {college}</div>
                             <div>🏢 {dept}</div>
-                            <div>📚 {crs}, {sem}</div>
+                            <div>🎓 {sem}</div>
                           </div>
                         </div>
                       );
@@ -923,12 +1010,12 @@ export default function EventModal({ event, onClose, onRegistered }) {
             </div>
 
             {/* Actions */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '1rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
               <button
                 onClick={handleFinalSubmit}
                 disabled={submitting}
                 className="neu-btn-gold"
-                style={{ padding: '0.85rem 2.5rem', fontSize: '0.9rem' }}
+                style={{ padding: '0.85rem 2.2rem', fontSize: '0.9rem', width: '100%', maxWidth: '340px' }}
               >
                 {submitting ? (
                   <span>Processing Payment...</span>

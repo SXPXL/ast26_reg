@@ -1,5 +1,5 @@
 import os
-from typing import List, Union
+from typing import List, Optional, Union
 from pydantic import AnyHttpUrl, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     CASHFREE_API_VERSION: str = "2023-08-01"
     CASHFREE_ENVIRONMENT: str = "SANDBOX"  # SANDBOX or PRODUCTION
     CASHFREE_RETURN_URL: str = "http://localhost:5173/payment/status?order_id={order_id}"
+    CASHFREE_NOTIFY_URL: Optional[str] = None
 
     # CORS
     BACKEND_CORS_ORIGINS: List[str] = [

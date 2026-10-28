@@ -28,11 +28,13 @@ async def verify_payment(
     """
     order_id = verify_req.order_id
 
-    # 1. Fetch PaymentOrder from DB
+    # 1. Fetch PaymentOrder from DB with eager loaded registration & event
     result = await db.execute(
         select(PaymentOrder)
         .where(PaymentOrder.cf_order_id == order_id)
-        .options(selectinload(PaymentOrder.registration))
+        .options(
+            selectinload(PaymentOrder.registration).selectinload(Registration.event)
+        )
     )
     payment_order = result.scalars().first()
 
@@ -55,32 +57,73 @@ async def verify_payment(
     payment_order.gateway_response = cf_status
 
     registration = payment_order.registration
+    final_status = "PENDING"
+    message = f"Payment is currently {cf_order_status}"
+    success = False
 
     if cf_order_status == "PAID":
         payment_order.payment_status = PaymentOrderStatus.PAID.value
         if registration:
             registration.payment_status = PaymentStatus.SUCCESS.value
         message = "Payment verified successfully."
+        final_status = "SUCCESS"
         success = True
     elif cf_order_status in ["EXPIRED", "TERMINATED", "CANCELLED"]:
         payment_order.payment_status = PaymentOrderStatus.EXPIRED.value
         if registration:
             registration.payment_status = PaymentStatus.FAILED.value
-        message = f"Payment status: {cf_order_status}"
+        message = f"Payment order is {cf_order_status.lower()}."
+        final_status = "FAILED"
         success = False
     else:
-        message = f"Payment is currently {cf_order_status}"
-        success = False
+        # Order is ACTIVE - check if any individual payment attempt occurred
+        payments = await cashfree_service.get_order_payments(order_id)
+        if payments:
+            # Check for any successful attempt
+            has_success = any(p.get("payment_status", "").upper() == "SUCCESS" for p in payments)
+            if has_success:
+                payment_order.payment_status = PaymentOrderStatus.PAID.value
+                if registration:
+                    registration.payment_status = PaymentStatus.SUCCESS.value
+                message = "Payment verified successfully."
+                final_status = "SUCCESS"
+                success = True
+            else:
+                # Check the most recent attempt
+                latest_p = payments[0]
+                latest_st = latest_p.get("payment_status", "").upper()
+                if latest_st in ["FAILED", "USER_DROPPED", "CANCELLED"]:
+                    payment_order.payment_status = PaymentOrderStatus.FAILED.value
+                    if registration:
+                        registration.payment_status = PaymentStatus.FAILED.value
+                    fail_msg = latest_p.get("payment_message") or f"Transaction was {latest_st.lower().replace('_', ' ')}."
+                    message = fail_msg
+                    final_status = "FAILED"
+                    success = False
+                elif latest_st in ["PENDING", "INITIALIZED"]:
+                    final_status = "PENDING"
+                    message = "Payment is processing at the bank..."
+                    success = False
+        else:
+            final_status = "PENDING"
+            message = "Payment awaiting completion at Cashfree."
+            success = False
 
     await db.commit()
+
+    event_title = registration.event.title if (registration and registration.event) else None
+    participant_name = registration.primary_name if registration else None
 
     return VerifyPaymentResponse(
         success=success,
         message=message,
         order_id=order_id,
         registration_code=registration.registration_code if registration else None,
-        payment_status=payment_order.payment_status,
+        payment_status=final_status,
         order_amount=payment_order.order_amount,
+        event_title=event_title,
+        participant_name=participant_name,
+        raw_status=cf_order_status,
     )
 
 

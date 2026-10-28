@@ -62,6 +62,12 @@ export const api = {
   getMe: async () => {
     return apiRequest('/auth/me');
   },
+  changeCredentials: async (credentialsData) => {
+    return apiRequest('/auth/credentials', {
+      method: 'PUT',
+      body: JSON.stringify(credentialsData),
+    });
+  },
 
   // Events Endpoints
   getEvents: async (params = {}) => {
@@ -169,3 +175,5 @@ export const api = {
     return `/api/v1/admin/stats/export/${eventId}`;
   },
 };
+
+export default api;

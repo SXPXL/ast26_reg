@@ -49,14 +49,11 @@ async def lifespan(app: FastAPI):
         # Ensure admin user exists with username "admin" and password "1234"
         async with AsyncSessionLocal() as db:
             from sqlalchemy import select
-            admin_res = await db.execute(select(User).where(User.username == "admin"))
+            admin_res = await db.execute(select(User).where(User.role == UserRole.ADMIN.value))
             admin = admin_res.scalars().first()
-            if not admin:
-                admin_res = await db.execute(select(User).where(User.email == "admin@fest.com"))
-                admin = admin_res.scalars().first()
 
-            hashed_pwd = get_password_hash("1234")
             if not admin:
+                hashed_pwd = get_password_hash("1234")
                 admin = User(
                     email="admin@fest.com",
                     username="admin",
@@ -70,11 +67,7 @@ async def lifespan(app: FastAPI):
                 await db.commit()
                 logger.info("Default Admin seeded: username='admin', password='1234'")
             else:
-                admin.username = "admin"
-                admin.hashed_password = hashed_pwd
-                admin.role = UserRole.ADMIN.value
-                await db.commit()
-                logger.info("Admin updated: username='admin', password='1234'")
+                logger.info(f"Existing Admin found: username='{admin.username}'")
 
         logger.info("Database tables, columns, and admin seeded successfully.")
     except Exception as e:

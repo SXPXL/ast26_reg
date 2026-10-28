@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { LogOut } from 'lucide-react';
+import { LogOut, Menu } from 'lucide-react';
 import AsthraLogo from './AsthraLogo';
 
-export default function Navbar({ isVolunteerRoute, onNavigate }) {
+export default function Navbar({ isVolunteerRoute, onNavigate, onToggleDrawer, drawerOpen }) {
   const { user, logout } = useAuth();
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -27,6 +27,7 @@ export default function Navbar({ isVolunteerRoute, onNavigate }) {
 
   return (
     <header
+      className={`site-navbar ${showVolunteerControls ? 'has-sidebar' : ''}`}
       style={{
         position: 'sticky',
         top: 0,
@@ -36,8 +37,6 @@ export default function Navbar({ isVolunteerRoute, onNavigate }) {
         WebkitBackdropFilter: 'blur(20px)',
         borderBottom: '1px solid var(--glass-border)',
         boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
-        padding: showVolunteerControls ? '0.85rem 2rem 0.85rem 5.5rem' : '0.85rem 2rem',
-        transition: 'padding 0.2s ease',
       }}
     >
       <div
@@ -49,28 +48,51 @@ export default function Navbar({ isVolunteerRoute, onNavigate }) {
           justifyContent: 'space-between',
         }}
       >
-        {/* Top Left: Logo + Asthra 26 */}
-        <div
-          onClick={() => onNavigate('/')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.75rem',
-            cursor: 'pointer',
-            userSelect: 'none',
-          }}
-        >
-          <AsthraLogo size={36} />
+        {/* Top Left: Logo + Asthra 26 + Mobile Menu Toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+          {showVolunteerControls && (
+            <button
+              onClick={onToggleDrawer}
+              aria-label="Toggle navigation drawer"
+              className="mobile-hamburger-btn"
+              style={{
+                background: 'rgba(212, 175, 55, 0.1)',
+                border: '1px solid rgba(212, 175, 55, 0.35)',
+                borderRadius: '8px',
+                color: 'var(--gold-bright)',
+                width: '36px',
+                height: '36px',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+              }}
+            >
+              <Menu size={20} />
+            </button>
+          )}
 
           <div
-            className="font-display gold-text-glow"
+            onClick={() => onNavigate('/')}
             style={{
-              fontSize: '1.35rem',
-              fontWeight: '800',
-              letterSpacing: '0.08em',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.65rem',
+              cursor: 'pointer',
+              userSelect: 'none',
             }}
           >
-            Asthra 26
+            <AsthraLogo size={32} />
+
+            <div
+              className="font-display gold-text-glow"
+              style={{
+                fontSize: '1.2rem',
+                fontWeight: '800',
+                letterSpacing: '0.06em',
+              }}
+            >
+              Asthra 26
+            </div>
           </div>
         </div>
 

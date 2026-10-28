@@ -8,7 +8,7 @@ from app.core.dependencies import get_current_user
 from app.core.security import create_access_token, get_password_hash, verify_password
 from app.db.session import get_db
 from app.models.user import User, UserRole
-from app.schemas.auth import Token, UserCreate, UserLogin, UserResponse
+from app.schemas.auth import ChangeCredentialsRequest, Token, UserCreate, UserLogin, UserResponse
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -105,3 +105,43 @@ async def get_me(
 ):
     """Fetch current user profile and role."""
     return current_user
+
+
+@router.put("/credentials", response_model=UserResponse)
+async def change_credentials(
+    payload: ChangeCredentialsRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update username and/or password for the authenticated user."""
+    # Verify current password if user is changing password
+    if payload.new_password:
+        if payload.current_password:
+            if not verify_password(payload.current_password, current_user.hashed_password):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Current password is incorrect.",
+                )
+        if len(payload.new_password.strip()) < 4:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="New password must be at least 4 characters long.",
+            )
+        current_user.hashed_password = get_password_hash(payload.new_password.strip())
+
+    if payload.new_username:
+        new_username = payload.new_username.lower().strip()
+        if new_username != (current_user.username or ""):
+            # Check for conflict
+            conflict = await db.execute(select(User).where(User.username == new_username))
+            if conflict.scalars().first():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Username '{new_username}' is already taken.",
+                )
+            current_user.username = new_username
+
+    await db.commit()
+    await db.refresh(current_user)
+    return current_user
+

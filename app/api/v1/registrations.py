@@ -224,7 +224,7 @@ async def get_registration_by_code(
 @router.get("", response_model=List[RegistrationSummary])
 async def list_registrations(
     event_id: Optional[str] = None,
-    payment_status: Optional[PaymentStatus] = None,
+    payment_status: Optional[str] = None,
     attendance_status: Optional[AttendanceStatus] = None,
     payment_mode: Optional[str] = None,
     search: Optional[str] = None,
@@ -233,7 +233,7 @@ async def list_registrations(
 ):
     """
     List registrations with filters.
-    Admins see all; Volunteers only see registrations for their assigned events.
+    Admins see all (with optional payment status filter); Volunteers ONLY see confirmed paid registrations.
     """
     query = select(Registration).options(
         selectinload(Registration.event),
@@ -249,12 +249,20 @@ async def list_registrations(
         if not allowed_event_ids:
             return []
         query = query.where(Registration.event_id.in_(allowed_event_ids))
+        # Volunteers MUST NEVER see unpaid / pending registrations
+        query = query.where(Registration.payment_status == PaymentStatus.SUCCESS.value)
+    else:
+        # Admin scoping:
+        if payment_status:
+            if payment_status.upper() != "ALL":
+                query = query.where(Registration.payment_status == payment_status.upper())
+        elif event_id:
+            # If viewing a specific event check-in roster without explicit payment filter, default to SUCCESS
+            query = query.where(Registration.payment_status == PaymentStatus.SUCCESS.value)
 
     if event_id:
         query = query.where(Registration.event_id == event_id)
-    if payment_status:
-        query = query.where(Registration.payment_status == payment_status.value)
-    if payment_mode:
+    if payment_mode and payment_mode.upper() != "ALL":
         query = query.where(Registration.payment_mode == payment_mode.upper())
     if attendance_status:
         query = query.where(Registration.attendance_status == attendance_status.value)
@@ -363,6 +371,13 @@ async def update_attendance(
         )
         if not assigned.scalars().first():
             raise HTTPException(status_code=403, detail="Not authorized to mark attendance for this event.")
+
+    # Prevent marking attendance if registration has not been paid
+    if update_in.attendance_status == AttendanceStatus.PRESENT and reg.payment_status != PaymentStatus.SUCCESS.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot check in participant: Payment has not been completed.",
+        )
 
     reg.attendance_status = update_in.attendance_status.value
     if update_in.attendance_status == AttendanceStatus.PRESENT:

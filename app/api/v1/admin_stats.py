@@ -32,8 +32,12 @@ async def get_overview_statistics(
     events = events_res.scalars().all()
     total_events = len(events)
 
-    # 2. Total registrations count
-    total_regs_res = await db.execute(select(func.count(Registration.id)))
+    # 2. Total registrations count (Only confirmed paid registrations)
+    total_regs_res = await db.execute(
+        select(func.count(Registration.id)).where(
+            Registration.payment_status == PaymentStatus.SUCCESS.value
+        )
+    )
     total_registrations = total_regs_res.scalar() or 0
 
     # 3. Confirmed paid registrations
@@ -104,9 +108,12 @@ async def get_overview_statistics(
     # 7. Event-wise statistics breakdown
     event_stats_list = []
     for ev in events:
-        # Total event registrations
+        # Total event registrations (Confirmed paid only)
         ev_all_regs_res = await db.execute(
-            select(func.count(Registration.id)).where(Registration.event_id == ev.id)
+            select(func.count(Registration.id)).where(
+                Registration.event_id == ev.id,
+                Registration.payment_status == PaymentStatus.SUCCESS.value,
+            )
         )
         ev_all_regs = ev_all_regs_res.scalar() or 0
 
@@ -216,7 +223,10 @@ async def export_event_registrations_csv(
 
     regs_res = await db.execute(
         select(Registration)
-        .where(Registration.event_id == event_id)
+        .where(
+            Registration.event_id == event_id,
+            Registration.payment_status == PaymentStatus.SUCCESS.value,
+        )
         .options(
             selectinload(Registration.team_members),
             selectinload(Registration.marked_by_volunteer),

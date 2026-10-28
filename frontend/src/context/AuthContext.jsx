@@ -4,8 +4,17 @@ import { api } from '../services/api';
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(() => {
+    try {
+      const cached = localStorage.getItem('athra_user');
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [loading, setLoading] = useState(() => {
+    return Boolean(localStorage.getItem('athra_token'));
+  });
 
   useEffect(() => {
     checkCurrentUser();
@@ -15,6 +24,7 @@ export function AuthProvider({ children }) {
     const token = localStorage.getItem('athra_token');
     if (!token) {
       setUser(null);
+      localStorage.removeItem('athra_user');
       setLoading(false);
       return;
     }
@@ -22,9 +32,11 @@ export function AuthProvider({ children }) {
     try {
       const userData = await api.getMe();
       setUser(userData);
+      localStorage.setItem('athra_user', JSON.stringify(userData));
     } catch (err) {
       console.warn('Session expired or invalid:', err);
       localStorage.removeItem('athra_token');
+      localStorage.removeItem('athra_user');
       setUser(null);
     } finally {
       setLoading(false);
@@ -35,7 +47,15 @@ export function AuthProvider({ children }) {
     const response = await api.login(username, password);
     if (response.access_token) {
       localStorage.setItem('athra_token', response.access_token);
-      setUser(response.user);
+      if (response.user) {
+        localStorage.setItem('athra_user', JSON.stringify(response.user));
+        setUser(response.user);
+      } else {
+        const u = await api.getMe();
+        localStorage.setItem('athra_user', JSON.stringify(u));
+        setUser(u);
+      }
+      setLoading(false);
       return response.user;
     }
     throw new Error('Login failed: Token not received');
@@ -43,7 +63,9 @@ export function AuthProvider({ children }) {
 
   const logout = () => {
     localStorage.removeItem('athra_token');
+    localStorage.removeItem('athra_user');
     setUser(null);
+    setLoading(false);
   };
 
   return (

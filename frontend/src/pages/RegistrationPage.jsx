@@ -674,8 +674,11 @@ export default function RegistrationPage({ initialMode = 'events' }) {
                         <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>Phone Number *</label>
                         <input
                           type="tel"
+                          inputMode="numeric"
+                          pattern="[0-9]{10}"
+                          maxLength={10}
                           value={formData.primary_phone}
-                          onChange={(e) => setFormData({ ...formData, primary_phone: e.target.value })}
+                          onChange={(e) => setFormData({ ...formData, primary_phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
                           className="neu-input"
                           placeholder="10-digit mobile"
                           required
@@ -789,9 +792,12 @@ export default function RegistrationPage({ initialMode = 'events' }) {
                             />
                             <input
                               type="tel"
-                              placeholder="Phone Number *"
+                              inputMode="numeric"
+                              pattern="[0-9]{10}"
+                              maxLength={10}
+                              placeholder="10-digit phone *"
                               value={member.phone}
-                              onChange={(e) => handleTeammateChange(index, 'phone', e.target.value)}
+                              onChange={(e) => handleTeammateChange(index, 'phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
                               className="neu-input"
                               required
                             />

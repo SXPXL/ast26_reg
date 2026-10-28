@@ -35,3 +35,6 @@ class VerifyPaymentResponse(BaseModel):
     registration_code: Optional[str] = None
     payment_status: str
     order_amount: Optional[Decimal] = None
+    event_title: Optional[str] = None
+    participant_name: Optional[str] = None
+    raw_status: Optional[str] = None

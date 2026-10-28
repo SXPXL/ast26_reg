@@ -399,6 +399,30 @@ body {
   animation: shimmer 2s infinite ease-in-out;
 }
 
+/* Skeleton Pulse Left-to-Right Shimmer Sweep */
+@keyframes skeletonSweep {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton-rect {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03) 0%,
+    rgba(255, 255, 255, 0.06) 20%,
+    rgba(212, 175, 55, 0.18) 50%,
+    rgba(255, 255, 255, 0.06) 80%,
+    rgba(255, 255, 255, 0.03) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeletonSweep 1.6s infinite ease-in-out;
+}
+
+
 /* Asthra Splash Screen Loader Animations */
 @keyframes splashFadeIn {
   0% {
@@ -454,3 +478,310 @@ body {
   animation: splashTextSweep 2.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.6s forwards;
   filter: drop-shadow(0 0 16px rgba(245, 215, 127, 0.35));
 }
+
+/* ==========================================================================
+   MOBILE & TABLET RESPONSIVE SYSTEM
+   ========================================================================== */
+
+/* Input Zoom Prevention on iOS & Touch Targets */
+@media (max-width: 768px) {
+  .glass-input,
+  .neu-input,
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Page Containers */
+.page-container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2.5rem 2rem 5rem;
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .page-container {
+    padding: 1.25rem 1rem 3.5rem !important;
+  }
+}
+
+/* Portal Content Container (Desktop 5.5rem sidebar space vs Mobile 1rem) */
+.portal-content-container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2.5rem 2rem 5rem 5.5rem;
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .portal-content-container {
+    padding: 1.25rem 1rem 4rem 1rem !important;
+  }
+}
+
+/* Navbar Responsive Padding */
+.site-navbar {
+  padding: 0.85rem 2rem;
+  transition: padding 0.2s ease;
+}
+.site-navbar.has-sidebar {
+  padding: 0.85rem 2rem 0.85rem 5.5rem;
+}
+
+@media (max-width: 768px) {
+  .site-navbar,
+  .site-navbar.has-sidebar {
+    padding: 0.75rem 1rem !important;
+  }
+}
+
+/* Events Grid Responsive */
+.events-grid-responsive {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 2rem;
+}
+
+@media (max-width: 768px) {
+  .events-grid-responsive {
+    grid-template-columns: 1fr !important;
+    gap: 1.25rem !important;
+  }
+}
+
+/* Modals Responsive */
+.responsive-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 3, 5, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.responsive-modal-card {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur-lg);
+  -webkit-backdrop-filter: var(--glass-blur-lg);
+  border-radius: 24px;
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.85), 0 0 35px rgba(212, 175, 55, 0.15);
+  width: 100%;
+  max-height: 92vh;
+  overflow-y: auto;
+  padding: 2.25rem;
+  position: relative;
+}
+
+@media (max-width: 640px) {
+  .responsive-modal-overlay {
+    padding: 0.5rem !important;
+  }
+  .responsive-modal-card {
+    padding: 1.5rem 1.15rem !important;
+    border-radius: 18px !important;
+    max-height: 95vh !important;
+  }
+}
+
+/* Turnout & Summary Stat Bars */
+.responsive-stat-bar {
+  display: flex;
+  gap: 2rem;
+  padding: 1.25rem 1.75rem;
+  border-radius: 16px;
+  background: var(--bg-card);
+  border: 1px solid rgba(212, 175, 55, 0.15);
+  box-shadow: var(--neu-shadow-flat);
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  .responsive-stat-bar {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 1rem !important;
+    padding: 1rem !important;
+  }
+}
+
+/* Filter Bar Responsive */
+.responsive-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  padding: 1.1rem 1.4rem;
+  border-radius: 16px;
+  background: var(--bg-card);
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  box-shadow: var(--neu-shadow-flat);
+  margin-bottom: 1.25rem;
+}
+
+@media (max-width: 768px) {
+  .responsive-filter-bar {
+    padding: 1rem !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 1rem !important;
+  }
+}
+
+/* Volunteer Attendee Card & Actions Responsive */
+.attendee-card {
+  background: var(--bg-card);
+  border-radius: 16px;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  box-shadow: var(--neu-shadow-flat);
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  min-height: 84px;
+}
+
+.attendee-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+  width: 240px;
+  justify-content: flex-end;
+}
+
+@media (max-width: 768px) {
+  .attendee-card {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 1rem !important;
+    padding: 1.15rem 1rem !important;
+  }
+  .attendee-card-actions {
+    width: 100% !important;
+    justify-content: stretch !important;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0.5rem !important;
+  }
+  .attendee-card-actions button {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+}
+
+/* Admin Participant Card & Actions */
+.admin-participant-card {
+  background: var(--bg-card);
+  border-radius: 16px;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  padding: 1.15rem 1.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.admin-participant-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+@media (max-width: 768px) {
+  .admin-participant-card {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    padding: 1rem !important;
+  }
+  .admin-participant-actions {
+    width: 100% !important;
+    justify-content: space-between !important;
+    gap: 0.5rem !important;
+  }
+  .admin-participant-actions button {
+    flex: 1 1 auto !important;
+    justify-content: center !important;
+  }
+}
+
+/* Payment Processing Card Responsive */
+.payment-card-responsive {
+  max-width: 520px;
+  width: 100%;
+  background: rgba(18, 17, 24, 0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(212, 175, 55, 0.25);
+  border-radius: 24px;
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 30px rgba(212, 175, 55, 0.1);
+  padding: 2.5rem 2rem;
+  text-align: center;
+  position: relative;
+  z-index: 2;
+}
+
+@media (max-width: 480px) {
+  .payment-card-responsive {
+    padding: 1.75rem 1.15rem !important;
+    border-radius: 18px !important;
+  }
+}
+
+/* Mobile Hamburger Button in Navbar (Hidden on desktop, shown on mobile) */
+.mobile-hamburger-btn {
+  display: none;
+}
+
+/* Mobile Sidebar Drawer Off-Canvas Rules */
+@media (max-width: 768px) {
+  .mobile-hamburger-btn {
+    display: flex !important;
+  }
+
+  /* When closed on mobile: completely hide off-canvas so NO icons/rail are shown over main content */
+  .sidebar-drawer.drawer-closed {
+    transform: translateX(-100%) !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    width: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* When opened on mobile: slide in smoothly with elevation shadow */
+  .sidebar-drawer.drawer-open {
+    transform: translateX(0) !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    width: min(85vw, 300px) !important;
+    box-shadow: 16px 0 50px rgba(0, 0, 0, 0.9) !important;
+  }
+}
+
+/* Event Card, Ticket Pass & Form Card Mobile Refinements */
+@media (max-width: 640px) {
+  .event-card {
+    padding: 1.25rem 1rem !important;
+  }
+  .digital-ticket-pass {
+    padding: 1.25rem 1rem !important;
+    border-radius: 18px !important;
+  }
+  .volunteer-form-card {
+    padding: 1.25rem 1rem !important;
+    border-radius: 18px !important;
+  }
+}
+

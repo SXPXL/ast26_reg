@@ -27,6 +27,11 @@ class VolunteerCreate(BaseModel):
 class UserLogin(BaseModel):
     username: str
     password: str
+class ChangeCredentialsRequest(BaseModel):
+    new_username: Optional[str] = None
+    new_password: Optional[str] = None
+    current_password: Optional[str] = None
+
 
 
 class UserResponse(BaseModel):

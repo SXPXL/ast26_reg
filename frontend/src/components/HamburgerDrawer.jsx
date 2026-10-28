@@ -94,6 +94,7 @@ export default function HamburgerDrawer({ isOpen, onClose, onToggle, activeSecti
 
       {/* Collapsible Sidebar Rail */}
       <aside
+        className={`sidebar-drawer ${isOpen ? 'drawer-open' : 'drawer-closed'}`}
         style={{
           position: 'fixed',
           left: 0,
@@ -111,7 +112,7 @@ export default function HamburgerDrawer({ isOpen, onClose, onToggle, activeSecti
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between',
-          transition: 'width 0.28s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.28s ease',
+          transition: 'transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), width 0.28s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.28s ease',
           overflowX: 'hidden',
           overflowY: 'auto',
         }}
@@ -146,12 +147,9 @@ export default function HamburgerDrawer({ isOpen, onClose, onToggle, activeSecti
               </div>
             )}
 
-            {/* Hamburger Button:
-                - When closed: placed centered in the 64px rail (far left)
-                - When open: present on the top right of the sidebar, clicking slides it back
-            */}
+            {/* Close / Hamburger Button */}
             <button
-              onClick={onToggle || (isOpen ? onClose : () => {})}
+              onClick={isOpen ? onClose : (onToggle || (() => {}))}
               aria-label={isOpen ? 'Collapse Sidebar' : 'Expand Sidebar'}
               title={isOpen ? 'Collapse Sidebar' : 'Expand Sidebar'}
               style={{
@@ -178,7 +176,7 @@ export default function HamburgerDrawer({ isOpen, onClose, onToggle, activeSecti
                 e.currentTarget.style.boxShadow = 'var(--neu-shadow-flat)';
               }}
             >
-              <Menu size={20} />
+              {isOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
           </div>
 
@@ -255,32 +253,20 @@ export default function HamburgerDrawer({ isOpen, onClose, onToggle, activeSecti
                     borderColor: isActive ? 'var(--gold-bright)' : 'rgba(255, 255, 255, 0.06)',
                   }}
                 >
-                  <Icon size={18} color={isActive ? '#F5D77F' : 'var(--gold-primary)'} style={{ flexShrink: 0 }} />
-                  <div style={{ overflow: 'hidden' }}>
-                    <div
-                      style={{
-                        fontWeight: '700',
-                        fontSize: '0.85rem',
-                        color: isActive ? 'var(--gold-bright)' : 'var(--text-white)',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                      }}
-                    >
-                      {item.label}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: '0.68rem',
-                        color: 'var(--text-muted)',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                      }}
-                    >
-                      {item.desc}
-                    </div>
-                  </div>
+                  <Icon size={19} color={isActive ? 'var(--gold-bright)' : 'var(--gold-primary)'} style={{ flexShrink: 0 }} />
+                  <span
+                    style={{
+                      fontWeight: '700',
+                      fontSize: '0.88rem',
+                      color: isActive ? 'var(--gold-bright)' : 'var(--text-white)',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      letterSpacing: '0.015em',
+                    }}
+                  >
+                    {item.label}
+                  </span>
                 </button>
               );
             })}

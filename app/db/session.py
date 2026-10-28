@@ -21,34 +21,25 @@ def _get_engine_config():
         scheme = "postgresql+asyncpg"
 
     host = parsed.hostname
-    port = parsed.port or 5432
     connect_args["timeout"] = 15
+
+    # Filter out query parameters unsupported by asyncpg (like sslmode, channel_binding)
+    clean_query = ""
+    if parsed.query:
+        valid_queries = [
+            q for q in parsed.query.split("&")
+            if q and not any(q.startswith(unsupported) for unsupported in ("sslmode=", "channel_binding="))
+        ]
+        clean_query = "&".join(valid_queries)
 
     # If connecting to an external cloud database (e.g. Neon PostgreSQL)
     if host and not host.startswith("localhost") and not host.startswith("127."):
-        try:
-            # Force IPv4 resolution to bypass hangs on Windows/networks with unroutable IPv6
-            ipv4_info = socket.getaddrinfo(host, port, socket.AF_INET)
-            if ipv4_info:
-                ipv4_host = ipv4_info[0][4][0]
-                ctx = ssl.create_default_context()
-                ctx.check_hostname = False
-                ctx.verify_mode = ssl.CERT_NONE
-                connect_args["ssl"] = ctx
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        connect_args["ssl"] = ctx
 
-                # Neon pooler endpoint option if connecting to *.neon.tech
-                if "neon.tech" in host:
-                    endpoint = host.split(".")[0].replace("-pooler", "")
-                    connect_args["server_settings"] = {"options": f"endpoint={endpoint}"}
-
-                user_part = f"{parsed.username}:{parsed.password}@" if parsed.username else ""
-                netloc = f"{user_part}{ipv4_host}:{port}"
-                url = urlunparse((scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
-                return url, connect_args
-        except Exception:
-            pass
-
-    url = urlunparse((scheme, parsed.netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
+    url = urlunparse((scheme, parsed.netloc, parsed.path, parsed.params, clean_query, parsed.fragment))
     return url, connect_args
 
 

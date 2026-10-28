@@ -28,6 +28,7 @@ export default function EventCard({ event, onClick }) {
 
   return (
     <div
+      className="event-card"
       onClick={() => onClick(event)}
       style={{
         background: 'var(--glass-bg)',
