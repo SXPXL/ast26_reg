@@ -74,6 +74,7 @@ export const api = {
     const query = new URLSearchParams();
     if (params.search) query.append('search', params.search);
     if (params.event_type) query.append('event_type', params.event_type);
+    if (params.include_inactive) query.append('include_inactive', 'true');
     if (params.is_active !== undefined) query.append('is_active', params.is_active);
     const qs = query.toString() ? `?${query.toString()}` : '';
     return apiRequest(`/events${qs}`);

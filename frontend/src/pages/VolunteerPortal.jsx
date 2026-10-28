@@ -18,6 +18,7 @@ import {
   Download,
   AlertCircle,
   Eye,
+  EyeOff,
   Lock,
   UserPlus,
   Filter,
@@ -326,7 +327,7 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
   const loadAdminEvents = async () => {
     try {
       setAdminEventsLoading(true);
-      const allEvs = await api.getEvents({ is_active: undefined });
+      const allEvs = await api.getEvents({ include_inactive: true });
       setAllEvents(allEvs || []);
       if (allEvs && allEvs.length > 0 && !manualEventId) {
         const savedManualId = sessionStorage.getItem('asthra_manual_event_id');
@@ -343,7 +344,7 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
   const loadAdminData = async () => {
     try {
       const [allEvs, vols, overviewStats] = await Promise.all([
-        api.getEvents({ is_active: undefined }).catch(() => []),
+        api.getEvents({ include_inactive: true }).catch(() => []),
         api.getVolunteers().catch(() => []),
         api.getOverviewStats().catch(() => null),
       ]);
@@ -2583,30 +2584,29 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
                 <div
                   key={ev.id}
                   style={{
-                    background: 'var(--bg-card)',
+                    background: isDeactivated ? 'rgba(18, 18, 26, 0.8)' : 'var(--bg-card)',
                     borderRadius: '20px',
-                    border: isDeactivated ? '1px dashed rgba(255, 255, 255, 0.15)' : '1px solid rgba(212, 175, 55, 0.2)',
+                    border: isDeactivated ? '1.5px dashed rgba(239, 68, 68, 0.35)' : '1px solid rgba(212, 175, 55, 0.2)',
                     padding: '1.5rem',
                     display: 'flex',
                     flexDirection: 'column',
                     justifyContent: 'space-between',
-                    boxShadow: isDeactivated ? 'none' : 'var(--neu-shadow-flat)',
-                    opacity: isDeactivated ? 0.55 : 1,
-                    filter: isDeactivated ? 'grayscale(0.4)' : 'none',
+                    boxShadow: isDeactivated ? '0 4px 18px rgba(0, 0, 0, 0.45)' : 'var(--neu-shadow-flat)',
                     transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+                    position: 'relative',
                   }}
                 >
-                  <div>
+                  <div style={{ opacity: isDeactivated ? 0.45 : 1, transition: 'opacity 0.2s ease' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem', gap: '0.5rem' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                         <h3 className="font-display gold-text" style={{ fontSize: '1.3rem', fontWeight: '700', color: isDeactivated ? '#9CA3AF' : undefined }}>
                           {ev.title}
                         </h3>
-                        {isDeactivated && (
+                        {isDeactivated ? (
                           <span
                             style={{
                               fontSize: '0.68rem',
-                              padding: '0.15rem 0.5rem',
+                              padding: '0.15rem 0.55rem',
                               borderRadius: '6px',
                               background: 'rgba(239, 68, 68, 0.15)',
                               border: '1px solid rgba(239, 68, 68, 0.35)',
@@ -2614,9 +2614,33 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
                               fontWeight: '700',
                               letterSpacing: '0.04em',
                               textTransform: 'uppercase',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.3rem',
                             }}
                           >
-                            Deactivated
+                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#EF4444', display: 'inline-block' }} />
+                            Inactive
+                          </span>
+                        ) : (
+                          <span
+                            style={{
+                              fontSize: '0.68rem',
+                              padding: '0.15rem 0.55rem',
+                              borderRadius: '6px',
+                              background: 'rgba(16, 185, 129, 0.15)',
+                              border: '1px solid rgba(16, 185, 129, 0.35)',
+                              color: '#34D399',
+                              fontWeight: '700',
+                              letterSpacing: '0.04em',
+                              textTransform: 'uppercase',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.3rem',
+                            }}
+                          >
+                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10B981', display: 'inline-block' }} />
+                            Active
                           </span>
                         )}
                       </div>
@@ -2641,11 +2665,27 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', gap: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                    <button onClick={() => handleOpenAssignModal(ev)} className="neu-btn" style={{ fontSize: '0.75rem', padding: '0.45rem 0.85rem' }}>
+                  <div style={{ display: 'flex', gap: '0.5rem', borderTop: isDeactivated ? '1px dashed rgba(255,255,255,0.08)' : '1px solid rgba(255,255,255,0.06)', paddingTop: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <button
+                      onClick={() => handleOpenAssignModal(ev)}
+                      className="neu-btn"
+                      style={{
+                        fontSize: '0.75rem',
+                        padding: '0.45rem 0.85rem',
+                        opacity: isDeactivated ? 0.5 : 1,
+                      }}
+                    >
                       Assign Volunteers
                     </button>
-                    <button onClick={() => handleOpenEditEvent(ev)} className="neu-btn" style={{ fontSize: '0.75rem', padding: '0.45rem 0.85rem' }}>
+                    <button
+                      onClick={() => handleOpenEditEvent(ev)}
+                      className="neu-btn"
+                      style={{
+                        fontSize: '0.75rem',
+                        padding: '0.45rem 0.85rem',
+                        opacity: isDeactivated ? 0.5 : 1,
+                      }}
+                    >
                       <Edit2 size={13} /> Edit
                     </button>
                     {isDeactivated ? (
@@ -2653,22 +2693,23 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
                         onClick={() => handleToggleEventActive(ev)}
                         className="neu-btn"
                         style={{
-                          fontSize: '0.75rem',
-                          padding: '0.45rem 0.95rem',
-                          background: 'rgba(16, 185, 129, 0.2)',
-                          borderColor: '#10B981',
+                          fontSize: '0.78rem',
+                          padding: '0.5rem 1.15rem',
+                          background: 'rgba(16, 185, 129, 0.25)',
+                          border: '1.5px solid #10B981',
                           color: '#34D399',
-                          fontWeight: '700',
-                          boxShadow: '0 0 12px rgba(16, 185, 129, 0.3)',
+                          fontWeight: '800',
+                          boxShadow: '0 0 16px rgba(16, 185, 129, 0.45)',
                           cursor: 'pointer',
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: '0.35rem',
-                          opacity: 1,
+                          gap: '0.4rem',
+                          borderRadius: '10px',
+                          transform: 'scale(1.02)',
                         }}
                         title="Click to activate this event"
                       >
-                        <CheckCircle size={13} color="#34D399" /> Activate
+                        <Eye size={14} color="#34D399" /> Activate
                       </button>
                     ) : (
                       <button
@@ -2687,7 +2728,7 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
                         }}
                         title="Click to deactivate this event"
                       >
-                        <Trash2 size={13} /> Deactivate
+                        <EyeOff size={14} /> Deactivate
                       </button>
                     )}
                   </div>

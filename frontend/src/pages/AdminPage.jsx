@@ -97,7 +97,7 @@ export default function AdminPage({ onBackToHome }) {
       setLoading(true);
       const [statsData, eventsData, volunteersData, regsData] = await Promise.all([
         api.getOverviewStats().catch(() => null),
-        api.getEvents({ is_active: undefined }).catch(() => []),
+        api.getEvents({ include_inactive: true }).catch(() => []),
         api.getVolunteers().catch(() => []),
         api.getRegistrations().catch(() => []),
       ]);

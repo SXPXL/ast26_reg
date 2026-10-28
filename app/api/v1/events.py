@@ -25,7 +25,8 @@ router = APIRouter(prefix="/events", tags=["Events"])
 async def list_events(
     search: Optional[str] = None,
     event_type: Optional[EventType] = None,
-    is_active: Optional[bool] = True,
+    is_active: Optional[bool] = Query(None),
+    include_inactive: bool = Query(False),
     db: AsyncSession = Depends(get_db),
 ):
     """List all events with optional filters."""
@@ -33,6 +34,8 @@ async def list_events(
 
     if is_active is not None:
         query = query.where(Event.is_active == is_active)
+    elif not include_inactive:
+        query = query.where(Event.is_active == True)
     if event_type:
         query = query.where(Event.event_type == event_type.value)
     if search:
