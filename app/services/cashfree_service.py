@@ -60,6 +60,18 @@ class CashfreeService:
         if return_url is None:
             return_url = settings.CASHFREE_RETURN_URL
 
+        # Replace {order_id} template placeholder if present
+        if "{order_id}" in return_url:
+            return_url = return_url.replace("{order_id}", order_id)
+
+        # Cashfree PG strictly rejects 'localhost' and bare '127.0.0.1' in return_url.
+        # Map localhost / 127.0.0.1 to 127.0.0.1.nip.io so local development and sandbox
+        # testing pass Cashfree URL validation while still resolving back to localhost.
+        if "localhost" in return_url:
+            return_url = return_url.replace("localhost", "127.0.0.1.nip.io")
+        elif "127.0.0.1" in return_url and "nip.io" not in return_url:
+            return_url = return_url.replace("127.0.0.1", "127.0.0.1.nip.io")
+
         # Cashfree production strictly mandates an https:// return URL
         if not self.is_sandbox and return_url.startswith("http://"):
             return_url = return_url.replace("http://", "https://", 1)

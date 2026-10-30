@@ -2328,17 +2328,40 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
                     padding: '1.25rem',
                     borderRadius: '16px',
                     display: 'inline-block',
-                    marginBottom: '1.25rem',
+                    marginBottom: '1rem',
                   }}
                 >
                   <QRCodeSVG
                     value={
                       manualOnlineOrder?.payment_session?.payment_link ||
-                      `https://sandbox.cashfree.com/pg/orders/${manualOnlineOrder?.payment_session?.order_id || ''}`
+                      (manualOnlineOrder?.payment_session?.payment_session_id
+                        ? `${window.location.origin}/payment/process?order_id=${encodeURIComponent(manualOnlineOrder.payment_session.order_id)}&session_id=${encodeURIComponent(manualOnlineOrder.payment_session.payment_session_id)}&env=${encodeURIComponent(manualOnlineOrder.payment_session.environment || 'sandbox')}&event=${encodeURIComponent(currentSelectedManualEvent?.title || 'Spot Registration')}&event_id=${encodeURIComponent(currentSelectedManualEvent?.id || '')}&amount=${encodeURIComponent(manualFee)}`
+                        : `${window.location.origin}/payment/status?order_id=${manualOnlineOrder?.payment_session?.order_id || ''}`)
                     }
                     size={160}
                     level="H"
                   />
+                </div>
+
+                <div style={{ marginBottom: '1rem' }}>
+                  <a
+                    href={
+                      manualOnlineOrder?.payment_session?.payment_link ||
+                      `${window.location.origin}/payment/process?order_id=${encodeURIComponent(manualOnlineOrder?.payment_session?.order_id || '')}&session_id=${encodeURIComponent(manualOnlineOrder?.payment_session?.payment_session_id || '')}&env=${encodeURIComponent(manualOnlineOrder?.payment_session?.environment || 'sandbox')}&event=${encodeURIComponent(currentSelectedManualEvent?.title || 'Spot Registration')}&event_id=${encodeURIComponent(currentSelectedManualEvent?.id || '')}&amount=${encodeURIComponent(manualFee)}`
+                    }
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      fontSize: '0.82rem',
+                      color: 'var(--gold-primary)',
+                      textDecoration: 'underline',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                    }}
+                  >
+                    Open Payment Tab Directly
+                  </a>
                 </div>
 
                 <div className="font-mono" style={{ fontSize: '1.2rem', fontWeight: '800', color: 'var(--gold-bright)', marginBottom: '1rem' }}>
