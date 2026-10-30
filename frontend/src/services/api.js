@@ -183,6 +183,38 @@ export const api = {
   getExportUrl: (eventId) => {
     return `/api/v1/admin/stats/export/${eventId}`;
   },
+  downloadRegistrationsExcel: async (params = {}) => {
+    const token = localStorage.getItem('athra_token') || localStorage.getItem('token');
+    const query = new URLSearchParams();
+    if (params.event_id && params.event_id !== 'ALL') query.append('event_id', params.event_id);
+    if (params.payment_status && params.payment_status !== 'ALL') query.append('payment_status', params.payment_status);
+    if (params.attendance_status && params.attendance_status !== 'ALL') query.append('attendance_status', params.attendance_status);
+    if (params.payment_mode && params.payment_mode !== 'ALL') query.append('payment_mode', params.payment_mode);
+    if (params.search) query.append('search', params.search);
+    if (token) query.append('token', token);
+
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    const res = await fetch(`/api/v1/admin/stats/export-xlsx${qs}`, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to download Excel file');
+    }
+
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = params.filename || `Asthra26_Participants_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  },
 };
 
 export default api;

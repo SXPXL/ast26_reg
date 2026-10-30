@@ -1,5 +1,5 @@
 from typing import List, Optional
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,19 +26,27 @@ MOCK_ADMIN_USER = User(
 
 async def get_current_user(
     auth_credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
+    token_query: Optional[str] = Query(None, alias="token"),
     db: AsyncSession = Depends(get_db),
 ) -> User:
     """
     Dependency to get the current authenticated user.
+    Supports Authorization Bearer header and ?token= query parameter (useful for file exports).
     If settings.REQ_AUTH is False and no valid token is provided, returns MOCK_ADMIN_USER.
     If settings.REQ_AUTH is True, strictly validates JWT token against the database.
     """
+    token = None
+    if auth_credentials:
+        token = auth_credentials.credentials
+    elif token_query:
+        token = token_query
+
     # If auth is disabled and no credentials provided, bypass with mock user
-    if not settings.REQ_AUTH and not auth_credentials:
+    if not settings.REQ_AUTH and not token:
         return MOCK_ADMIN_USER
 
     # If auth is required and no credentials provided
-    if not auth_credentials:
+    if not token:
         if not settings.REQ_AUTH:
             return MOCK_ADMIN_USER
         raise HTTPException(
@@ -47,7 +55,6 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    token = auth_credentials.credentials
     payload = decode_access_token(token)
 
     if not payload:

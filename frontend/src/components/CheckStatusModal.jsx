@@ -22,36 +22,40 @@ export default function CheckStatusModal({ isOpen, onClose }) {
 
   const { success: toastSuccess, error: toastError, info: toastInfo } = useToast();
 
-  const [emailInput, setEmailInput] = useState(() => {
-    try {
-      const raw = localStorage.getItem('asthra_user_profile');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        return parsed.primary_email || '';
-      }
-    } catch {
-      // ignore
-    }
-    return '';
-  });
-
+  const [emailInput, setEmailInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [results, setResults] = useState([]);
   const [recheckingId, setRecheckingId] = useState(null);
   const [selectedPass, setSelectedPass] = useState(null);
 
-  // Auto-search if email is prefilled from localStorage on modal open
-  useEffect(() => {
-    if (emailInput && emailInput.trim().includes('@')) {
-      handleSearch(emailInput.trim());
+  // Email validation regex (standard RFC-compliant email pattern)
+  const isValidEmail = (email) => {
+    return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email.trim());
+  };
+
+  const handleInputChange = (e) => {
+    const val = e.target.value;
+    setEmailInput(val);
+    // If the input is empty or cleared, don't show anything
+    if (!val.trim()) {
+      setHasSearched(false);
+      setResults([]);
     }
-  }, []);
+  };
 
   const handleSearch = async (emailToQuery) => {
     const targetEmail = (emailToQuery !== undefined ? emailToQuery : emailInput).trim();
     if (!targetEmail) {
-      toastError('Please enter your email address');
+      setHasSearched(false);
+      setResults([]);
+      return;
+    }
+
+    if (!isValidEmail(targetEmail)) {
+      toastError('Please enter a valid email address (e.g. name@example.com)');
+      setHasSearched(false);
+      setResults([]);
       return;
     }
 
@@ -231,7 +235,7 @@ export default function CheckStatusModal({ isOpen, onClose }) {
                   type="email"
                   placeholder="Enter your registered email..."
                   value={emailInput}
-                  onChange={(e) => setEmailInput(e.target.value)}
+                  onChange={handleInputChange}
                   className="neu-input"
                   required
                   style={{
@@ -291,7 +295,7 @@ export default function CheckStatusModal({ isOpen, onClose }) {
               </button>
             </form>
 
-            {/* Content area */}
+            {/* Content area: Only show results if a proper email was entered and searched. If empty, show nothing. */}
             {loading ? (
               <div
                 style={{
@@ -308,7 +312,7 @@ export default function CheckStatusModal({ isOpen, onClose }) {
                   Looking up entries for {emailInput}
                 </div>
               </div>
-            ) : hasSearched && results.length === 0 ? (
+            ) : hasSearched && emailInput.trim() && isValidEmail(emailInput) && results.length === 0 ? (
               <div
                 style={{
                   textAlign: 'center',
@@ -326,7 +330,7 @@ export default function CheckStatusModal({ isOpen, onClose }) {
                   We couldn't find any registrations under <strong style={{ color: 'var(--text-white)' }}>{emailInput}</strong>. Please ensure the email address matches what you entered during registration.
                 </p>
               </div>
-            ) : results.length > 0 ? (
+            ) : hasSearched && emailInput.trim() && isValidEmail(emailInput) && results.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 <div
                   style={{

@@ -501,6 +501,48 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
     }
   };
 
+  // Excel Export Handlers (teammates included as separate participant rows)
+  const [exportingExcel, setExportingExcel] = useState(false);
+
+  const handleExportFilteredParticipantsExcel = async () => {
+    try {
+      setExportingExcel(true);
+      toast.info('Generating Excel workbook with individual teammate details...');
+      await api.downloadRegistrationsExcel({
+        event_id: participantFilterEvent,
+        attendance_status: participantFilterAttendance,
+        payment_mode: participantFilterPaymentMode,
+        payment_status: participantFilterPaymentStatus,
+        search: participantSearch.trim(),
+        filename: `Asthra26_Participants_${new Date().toISOString().slice(0, 10)}.xlsx`,
+      });
+      toast.success('Excel workbook downloaded successfully!');
+    } catch (err) {
+      console.error('Export error:', err);
+      toast.error(err.message || 'Failed to export Excel file');
+    } finally {
+      setExportingExcel(false);
+    }
+  };
+
+  const handleExportEventRosterExcel = async (eventId, eventTitle) => {
+    try {
+      setExportingExcel(true);
+      toast.info(`Generating Excel roster for "${eventTitle || 'Event'}"...`);
+      await api.downloadRegistrationsExcel({
+        event_id: eventId,
+        payment_status: 'SUCCESS',
+        filename: `Asthra26_${(eventTitle || 'Event').replace(/[^a-zA-Z0-9]/g, '_')}_Roster.xlsx`,
+      });
+      toast.success(`Roster for "${eventTitle || 'Event'}" downloaded!`);
+    } catch (err) {
+      console.error('Event export error:', err);
+      toast.error(err.message || 'Failed to export event roster');
+    } finally {
+      setExportingExcel(false);
+    }
+  };
+
   // Event creation & editing
   const handleOpenCreateEvent = () => {
     setEditingEvent(null);
@@ -1032,13 +1074,62 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
       {/* ======================================================== */}
       {activeSection === 'status' && (
         <div>
-          <div style={{ marginBottom: '2rem' }}>
-            <h1 className="font-display gold-text-glow" style={{ fontSize: '2.2rem', fontWeight: '800', lineHeight: 1.2 }}>
-              Event Status & Check-In
-            </h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-              Select an event below to view registrations and check mark participants entering the event hall.
-            </p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <div>
+              <h1 className="font-display gold-text-glow" style={{ fontSize: '2.2rem', fontWeight: '800', lineHeight: 1.2 }}>
+                Event Status & Check-In
+              </h1>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                Select an event below to view registrations and check mark participants entering the event hall.
+              </p>
+            </div>
+
+            {selectedEventId && (
+              <button
+                type="button"
+                disabled={exportingExcel || validRegistrations.length === 0}
+                onClick={() => {
+                  const ev = assignedEvents.find((e) => e.id === selectedEventId);
+                  handleExportEventRosterExcel(selectedEventId, ev?.title || 'Event');
+                }}
+                style={{
+                  background: 'linear-gradient(135deg, rgba(212, 175, 55, 0.16) 0%, rgba(170, 124, 17, 0.28) 100%)',
+                  border: '1.5px solid rgba(212, 175, 55, 0.5)',
+                  color: 'var(--gold-bright)',
+                  padding: '0.65rem 1.25rem',
+                  borderRadius: '12px',
+                  fontWeight: '700',
+                  fontSize: '0.85rem',
+                  cursor: (exportingExcel || validRegistrations.length === 0) ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.55rem',
+                  opacity: (exportingExcel || validRegistrations.length === 0) ? 0.6 : 1,
+                  boxShadow: '0 4px 14px rgba(0, 0, 0, 0.35)',
+                  transition: 'all 0.2s ease',
+                }}
+                onMouseEnter={(e) => {
+                  if (!exportingExcel && validRegistrations.length > 0) {
+                    e.currentTarget.style.background = 'linear-gradient(135deg, #D4AF37 0%, #AA7C11 100%)';
+                    e.currentTarget.style.color = '#000';
+                    e.currentTarget.style.boxShadow = '0 0 18px rgba(212, 175, 55, 0.45)';
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!exportingExcel && validRegistrations.length > 0) {
+                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(212, 175, 55, 0.16) 0%, rgba(170, 124, 17, 0.28) 100%)';
+                    e.currentTarget.style.color = 'var(--gold-bright)';
+                    e.currentTarget.style.boxShadow = '0 4px 14px rgba(0, 0, 0, 0.35)';
+                    e.currentTarget.style.transform = 'translateY(0)';
+                  }
+                }}
+                title="Download this event's check-in roster as Excel (.xlsx) with teammates as separate rows"
+              >
+                <FileSpreadsheet size={17} />
+                <span>{exportingExcel ? 'Exporting...' : 'Export Event Roster (.xlsx)'}</span>
+              </button>
+            )}
           </div>
 
           {assignedEvents.length === 0 ? (
@@ -2173,8 +2264,50 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
               </p>
             </div>
 
-            {/* Quick stats counter */}
-            <div style={{ display: 'flex', gap: '1rem' }}>
+            {/* Actions & Quick stats counter */}
+            <div style={{ display: 'flex', gap: '0.85rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                disabled={exportingExcel || filteredAdminRegistrations.length === 0}
+                onClick={handleExportFilteredParticipantsExcel}
+                style={{
+                  background: 'linear-gradient(135deg, rgba(212, 175, 55, 0.16) 0%, rgba(170, 124, 17, 0.28) 100%)',
+                  border: '1.5px solid rgba(212, 175, 55, 0.5)',
+                  color: 'var(--gold-bright)',
+                  padding: '0.65rem 1.25rem',
+                  borderRadius: '12px',
+                  fontWeight: '700',
+                  fontSize: '0.85rem',
+                  cursor: (exportingExcel || filteredAdminRegistrations.length === 0) ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.55rem',
+                  opacity: (exportingExcel || filteredAdminRegistrations.length === 0) ? 0.6 : 1,
+                  boxShadow: '0 4px 14px rgba(0, 0, 0, 0.35)',
+                  transition: 'all 0.2s ease',
+                }}
+                onMouseEnter={(e) => {
+                  if (!exportingExcel && filteredAdminRegistrations.length > 0) {
+                    e.currentTarget.style.background = 'linear-gradient(135deg, #D4AF37 0%, #AA7C11 100%)';
+                    e.currentTarget.style.color = '#000';
+                    e.currentTarget.style.boxShadow = '0 0 18px rgba(212, 175, 55, 0.45)';
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!exportingExcel && filteredAdminRegistrations.length > 0) {
+                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(212, 175, 55, 0.16) 0%, rgba(170, 124, 17, 0.28) 100%)';
+                    e.currentTarget.style.color = 'var(--gold-bright)';
+                    e.currentTarget.style.boxShadow = '0 4px 14px rgba(0, 0, 0, 0.35)';
+                    e.currentTarget.style.transform = 'translateY(0)';
+                  }
+                }}
+                title="Download filtered participants as styled Excel (.xlsx) with teammates as separate rows"
+              >
+                <FileSpreadsheet size={17} />
+                <span>{exportingExcel ? 'Exporting...' : 'Export to Excel (.xlsx)'}</span>
+              </button>
+
               <div style={{ background: 'var(--bg-card)', padding: '0.65rem 1.25rem', borderRadius: '12px', border: '1px solid rgba(212, 175, 55, 0.2)' }}>
                 <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Filtered Count</div>
                 <div className="font-mono" style={{ fontSize: '1.25rem', fontWeight: '800', color: 'var(--gold-bright)' }}>
@@ -2768,16 +2901,62 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
       {/* ======================================================== */}
       {activeSection === 'stats' && isAdmin && (
         <div>
-          <div style={{ marginBottom: '2rem' }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--gold-bright)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
-              Financial & Operations Report
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <div>
+              <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--gold-bright)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
+                Financial & Operations Report
+              </div>
+              <h1 className="font-display gold-text-glow" style={{ fontSize: '2.2rem', fontWeight: '800' }}>
+                Analytics & Overview
+              </h1>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                Real-time revenue metrics, offline cash vs online payments, and event turnout rates.
+              </p>
             </div>
-            <h1 className="font-display gold-text-glow" style={{ fontSize: '2.2rem', fontWeight: '800' }}>
-              Analytics & Overview
-            </h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-              Real-time revenue metrics, offline cash vs online payments, and event turnout rates.
-            </p>
+
+            <button
+              type="button"
+              disabled={exportingExcel}
+              onClick={() => {
+                handleExportFilteredParticipantsExcel();
+              }}
+              style={{
+                background: 'linear-gradient(135deg, rgba(212, 175, 55, 0.16) 0%, rgba(170, 124, 17, 0.28) 100%)',
+                border: '1.5px solid rgba(212, 175, 55, 0.5)',
+                color: 'var(--gold-bright)',
+                padding: '0.65rem 1.25rem',
+                borderRadius: '12px',
+                fontWeight: '700',
+                fontSize: '0.85rem',
+                cursor: exportingExcel ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.55rem',
+                opacity: exportingExcel ? 0.6 : 1,
+                boxShadow: '0 4px 14px rgba(0, 0, 0, 0.35)',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                if (!exportingExcel) {
+                  e.currentTarget.style.background = 'linear-gradient(135deg, #D4AF37 0%, #AA7C11 100%)';
+                  e.currentTarget.style.color = '#000';
+                  e.currentTarget.style.boxShadow = '0 0 18px rgba(212, 175, 55, 0.45)';
+                  e.currentTarget.style.transform = 'translateY(-1px)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!exportingExcel) {
+                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(212, 175, 55, 0.16) 0%, rgba(170, 124, 17, 0.28) 100%)';
+                  e.currentTarget.style.color = 'var(--gold-bright)';
+                  e.currentTarget.style.boxShadow = '0 4px 14px rgba(0, 0, 0, 0.35)';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }
+              }}
+              title="Download Master Fest report with all events and separate teammate rows (.xlsx)"
+            >
+              <FileSpreadsheet size={17} />
+              <span>{exportingExcel ? 'Exporting...' : 'Export Master Fest Excel (.xlsx)'}</span>
+            </button>
           </div>
 
           {/* Top Metrics Cards */}
@@ -2854,7 +3033,7 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'center' }}>
                       <div style={{ textAlign: 'right' }}>
                         <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Revenue</div>
                         <div className="font-mono" style={{ fontWeight: '800', color: 'var(--gold-bright)' }}>
@@ -2868,6 +3047,38 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
                           ₹{parseFloat(ev.offline_revenue || 0).toFixed(0)}
                         </div>
                       </div>
+
+                      <button
+                        type="button"
+                        disabled={exportingExcel}
+                        onClick={() => handleExportEventRosterExcel(ev.event_id, ev.event_title)}
+                        style={{
+                          background: 'rgba(212, 175, 55, 0.1)',
+                          border: '1px solid rgba(212, 175, 55, 0.35)',
+                          color: 'var(--gold-bright)',
+                          padding: '0.45rem 0.85rem',
+                          borderRadius: '10px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.4rem',
+                          fontSize: '0.78rem',
+                          fontWeight: '700',
+                          transition: 'all 0.2s ease',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = 'linear-gradient(135deg, #D4AF37 0%, #AA7C11 100%)';
+                          e.currentTarget.style.color = '#000';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'rgba(212, 175, 55, 0.1)';
+                          e.currentTarget.style.color = 'var(--gold-bright)';
+                        }}
+                        title={`Download ${ev.event_title} Excel roster`}
+                      >
+                        <FileSpreadsheet size={15} />
+                        <span>Export</span>
+                      </button>
                     </div>
                   </div>
                 ))}

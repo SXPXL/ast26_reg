@@ -44,13 +44,18 @@ def _get_engine_config():
 
 
 from sqlalchemy.pool import NullPool
+import logging
+
+# Suppress verbose SQL queries, pool transactions, and rollbacks from terminal logs
+logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+logging.getLogger("sqlalchemy.pool").setLevel(logging.WARNING)
 
 _url, _connect_args = _get_engine_config()
 
 engine = create_async_engine(
     _url,
     poolclass=NullPool,
-    echo=settings.DEBUG,
+    echo=False,
     future=True,
     connect_args=_connect_args,
 )

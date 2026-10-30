@@ -16,10 +16,24 @@ from app.core.security import get_password_hash
 from app.db.session import AsyncSessionLocal, Base, engine
 from app.models.user import User, UserRole
 
+# Configure logging so logs show clean INFO records without SQL rollbacks or asyncio debug noise
 logging.basicConfig(
-    level=logging.INFO if not settings.DEBUG else logging.DEBUG,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
+    format="%(levelname)s:     %(message)s",
 )
+
+# Silence noisy third-party loggers (SQLAlchemy statements/rollbacks, asyncio proactor, etc.)
+for noisy_logger in [
+    "sqlalchemy.engine",
+    "sqlalchemy.engine.Engine",
+    "sqlalchemy.pool",
+    "sqlalchemy.dialects",
+    "sqlalchemy.orm",
+    "asyncio",
+    "passlib",
+]:
+    logging.getLogger(noisy_logger).setLevel(logging.WARNING)
+
 logger = logging.getLogger("athra_fest")
 
 
