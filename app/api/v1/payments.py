@@ -11,6 +11,7 @@ from app.models.payment import PaymentOrder, PaymentOrderStatus
 from app.models.registration import PaymentStatus, Registration
 from app.schemas.payment import VerifyPaymentRequest, VerifyPaymentResponse
 from app.services.cashfree_service import cashfree_service
+from app.services.registration_service import assign_team_number_if_needed
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,7 @@ async def verify_payment(
         payment_order.payment_status = PaymentOrderStatus.PAID.value
         if registration:
             registration.payment_status = PaymentStatus.SUCCESS.value
+            await assign_team_number_if_needed(db, registration)
         message = "Payment verified successfully."
         final_status = "SUCCESS"
         success = True
@@ -85,6 +87,7 @@ async def verify_payment(
                 payment_order.payment_status = PaymentOrderStatus.PAID.value
                 if registration:
                     registration.payment_status = PaymentStatus.SUCCESS.value
+                    await assign_team_number_if_needed(db, registration)
                 message = "Payment verified successfully."
                 final_status = "SUCCESS"
                 success = True
@@ -160,6 +163,7 @@ async def cashfree_webhook(
                 payment_order.payment_status = PaymentOrderStatus.PAID.value
                 if payment_order.registration:
                     payment_order.registration.payment_status = PaymentStatus.SUCCESS.value
+                    await assign_team_number_if_needed(db, payment_order.registration)
             elif event_type == "PAYMENT_FAILED_WEBHOOK":
                 payment_order.payment_status = PaymentOrderStatus.FAILED.value
                 if payment_order.registration:

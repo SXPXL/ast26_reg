@@ -25,7 +25,10 @@ from app.schemas.registration import (
     RegistrationSummary,
 )
 from app.services.cashfree_service import cashfree_service
-from app.services.registration_service import get_unique_registration_code
+from app.services.registration_service import (
+    assign_team_number_if_needed,
+    get_unique_registration_code,
+)
 
 router = APIRouter(prefix="/registrations", tags=["Registrations"])
 
@@ -190,6 +193,7 @@ async def create_registration(
                 if cf_status == "PAID":
                     p_order.payment_status = PaymentOrderStatus.PAID.value
                     p_reg.payment_status = PaymentStatus.SUCCESS.value
+                    await assign_team_number_if_needed(db, p_reg)
                     await db.commit()
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
@@ -222,13 +226,7 @@ async def create_registration(
     if event.event_type == EventType.TEAM.value:
         if reg_in.team_name and reg_in.team_name.strip():
             assigned_team_name = reg_in.team_name.strip()
-        else:
-            # Assign team number in order of registration starting from 1
-            count_res = await db.execute(
-                select(func.count(Registration.id)).where(Registration.event_id == event.id)
-            )
-            existing_team_count = count_res.scalar() or 0
-            assigned_team_name = f"Team {existing_team_count + 1}"
+        # Note: If no custom team name, auto 'Team N' will only be assigned once payment is SUCCESS!
 
     # If event is free or paid offline cash, immediately mark as SUCCESS
     initial_payment_status = (
@@ -255,6 +253,10 @@ async def create_registration(
     )
     db.add(registration)
     await db.flush()  # Generates registration.id
+
+    # If already SUCCESS (free / offline cash), assign team number now
+    if initial_payment_status == PaymentStatus.SUCCESS.value:
+        await assign_team_number_if_needed(db, registration)
 
     # 4. Add Team Members
     for member in reg_in.team_members:
@@ -430,6 +432,7 @@ async def recheck_registration_payment(
         if cf_order_status == "PAID":
             order.payment_status = PaymentOrderStatus.PAID.value
             reg.payment_status = PaymentStatus.SUCCESS.value
+            await assign_team_number_if_needed(db, reg)
             await db.commit()
             return {
                 "registration_id": reg.id,
@@ -443,6 +446,7 @@ async def recheck_registration_payment(
         if payments and any(p.get("payment_status", "").upper() == "SUCCESS" for p in payments):
             order.payment_status = PaymentOrderStatus.PAID.value
             reg.payment_status = PaymentStatus.SUCCESS.value
+            await assign_team_number_if_needed(db, reg)
             await db.commit()
             return {
                 "registration_id": reg.id,
