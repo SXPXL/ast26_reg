@@ -18,7 +18,13 @@ from app.models.event import Event, EventVolunteer
 from app.models.registration import AttendanceStatus, PaymentStatus, Registration
 from app.models.team_member import TeamMember
 from app.models.user import User, UserRole
-from app.schemas.stats import EventStatItem, OverallStatsResponse
+from app.schemas.stats import (
+    CollegeStatItem,
+    DepartmentStatItem,
+    EventStatItem,
+    OverallStatsResponse,
+    TimelineStatItem,
+)
 
 router = APIRouter(prefix="/admin/stats", tags=["Admin Analytics"])
 
@@ -109,8 +115,86 @@ async def get_overview_statistics(
     )
     team_members_count = team_members_res.scalar() or 0
     total_participants = total_confirmed + team_members_count
+    overall_attendance_rate = round((total_checked_in / total_confirmed * 100.0), 1) if total_confirmed > 0 else 0.0
 
-    # 7. Event-wise statistics breakdown
+    # 7. Solo vs Team registrations
+    solo_count_res = await db.execute(
+        select(func.count(Registration.id))
+        .join(Event, Event.id == Registration.event_id)
+        .where(
+            Registration.payment_status == PaymentStatus.SUCCESS.value,
+            Event.event_type == "INDIVIDUAL",
+        )
+    )
+    solo_registrations_count = solo_count_res.scalar() or 0
+    team_registrations_count = max(0, total_confirmed - solo_registrations_count)
+
+    # 8. Top colleges
+    colleges_res = await db.execute(
+        select(
+            Registration.college_name,
+            func.count(Registration.id).label("reg_count"),
+        )
+        .where(
+            Registration.payment_status == PaymentStatus.SUCCESS.value,
+            Registration.college_name.isnot(None),
+            Registration.college_name != "",
+        )
+        .group_by(Registration.college_name)
+        .order_by(func.count(Registration.id).desc())
+        .limit(6)
+    )
+    top_colleges = [
+        CollegeStatItem(
+            college_name=row[0],
+            count=row[1],
+            participants_count=row[1],
+        )
+        for row in colleges_res.all()
+    ]
+
+    # 9. Top departments
+    depts_res = await db.execute(
+        select(
+            Registration.department,
+            func.count(Registration.id),
+        )
+        .where(
+            Registration.payment_status == PaymentStatus.SUCCESS.value,
+            Registration.department.isnot(None),
+            Registration.department != "",
+        )
+        .group_by(Registration.department)
+        .order_by(func.count(Registration.id).desc())
+        .limit(6)
+    )
+    top_departments = [
+        DepartmentStatItem(department=row[0], count=row[1])
+        for row in depts_res.all()
+    ]
+
+    # 10. Recent timeline (Daily registrations & revenue)
+    timeline_res = await db.execute(
+        select(
+            func.date(Registration.created_at).label("reg_date"),
+            func.count(Registration.id).label("cnt"),
+            func.sum(Registration.total_amount).label("rev"),
+        )
+        .where(Registration.payment_status == PaymentStatus.SUCCESS.value)
+        .group_by(func.date(Registration.created_at))
+        .order_by(func.date(Registration.created_at).asc())
+        .limit(14)
+    )
+    recent_timeline = [
+        TimelineStatItem(
+            date=str(row[0]),
+            registrations=row[1],
+            revenue=row[2] or Decimal("0.00"),
+        )
+        for row in timeline_res.all()
+    ]
+
+    # 11. Event-wise statistics breakdown
     event_stats_list = []
     for ev in events:
         # Total event registrations (Confirmed paid only)
@@ -187,6 +271,9 @@ async def get_overview_statistics(
                 event_id=str(ev.id),
                 event_title=ev.title,
                 event_type=ev.event_type,
+                registration_fee=Decimal(str(ev.registration_fee or 0)),
+                max_capacity=ev.max_capacity or 100,
+                is_active=ev.is_active,
                 total_registrations=ev_all_regs,
                 confirmed_paid_registrations=ev_conf,
                 total_participants_count=ev_participants_count,
@@ -204,12 +291,18 @@ async def get_overview_statistics(
         total_confirmed_registrations=total_confirmed,
         total_participants=total_participants,
         total_checked_in=total_checked_in,
+        overall_attendance_rate=overall_attendance_rate,
         total_revenue=total_revenue,
         online_revenue=online_revenue,
         offline_revenue=offline_revenue,
         online_registrations_count=online_registrations_count,
         offline_registrations_count=offline_registrations_count,
+        solo_registrations_count=solo_registrations_count,
+        team_registrations_count=team_registrations_count,
         recent_registrations_count=total_confirmed,
+        top_colleges=top_colleges,
+        top_departments=top_departments,
+        recent_timeline=recent_timeline,
         event_stats=event_stats_list,
     )
 
