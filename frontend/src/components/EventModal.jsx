@@ -161,13 +161,25 @@ export default function EventModal({ event, onClose, onRegistered }) {
         return;
       }
 
+      const primaryEmailClean = formData.primary_email.trim().toLowerCase();
+      const seenTmEmails = new Set();
       for (let i = 0; i < formData.team_members.length; i++) {
         const tm = formData.team_members[i];
         const tmPhoneClean = tm.phone.replace(/\D/g, '');
+        const tmEmailClean = tm.email.trim().toLowerCase();
         if (!tm.full_name.trim() || !tm.email.trim() || tmPhoneClean.length < 10) {
           setError(`Please enter a valid 10-digit mobile number for Teammate #${i + 1}.`);
           return;
         }
+        if (tmEmailClean === primaryEmailClean) {
+          setError(`Primary registrant email (${primaryEmailClean}) cannot also be added as a teammate.`);
+          return;
+        }
+        if (seenTmEmails.has(tmEmailClean)) {
+          setError(`Duplicate teammate email found: ${tmEmailClean}. Each participant must have a unique email.`);
+          return;
+        }
+        seenTmEmails.add(tmEmailClean);
       }
     }
 

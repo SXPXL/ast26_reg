@@ -1,11 +1,14 @@
 from datetime import datetime, timezone
 from decimal import Decimal
+import logging
 from typing import List, Optional
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+
+logger = logging.getLogger(__name__)
 
 from app.core.dependencies import get_current_user, require_admin, require_volunteer_or_admin
 from app.db.session import get_db
@@ -82,7 +85,135 @@ async def create_registration(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Team cannot exceed {event.max_team_size} members (including leader).",
             )
-    # 3. Create Registration Record
+
+    # 3. Validate Unique Email Per Event ("One email per event" rule)
+    primary_email = reg_in.primary_email.strip().lower()
+    teammate_emails = [m.email.strip().lower() for m in reg_in.team_members]
+
+    # Check for duplicate emails within this incoming registration request
+    if primary_email in teammate_emails:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"The primary registrant email '{primary_email}' cannot also be added as a team member.",
+        )
+
+    seen_tm_emails = set()
+    for tm_email in teammate_emails:
+        if tm_email in seen_tm_emails:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Duplicate team member email '{tm_email}' found in registration.",
+            )
+        seen_tm_emails.add(tm_email)
+
+    all_emails = [primary_email] + teammate_emails
+
+    # Check if any incoming email has already been registered for this event as primary registrant
+    existing_primary_res = await db.execute(
+        select(Registration.primary_email)
+        .where(
+            Registration.event_id == event.id,
+            func.lower(Registration.primary_email).in_(all_emails),
+            Registration.payment_status == PaymentStatus.SUCCESS.value,
+        )
+    )
+    conflict_primary = existing_primary_res.scalars().first()
+    if conflict_primary:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"The email '{conflict_primary}' has already been registered for this event.",
+        )
+
+    # Check if any incoming email has already been registered for this event as a team member
+    existing_member_res = await db.execute(
+        select(TeamMember.email)
+        .join(Registration, TeamMember.registration_id == Registration.id)
+        .where(
+            Registration.event_id == event.id,
+            func.lower(TeamMember.email).in_(all_emails),
+            Registration.payment_status == PaymentStatus.SUCCESS.value,
+        )
+    )
+    conflict_member = existing_member_res.scalars().first()
+    if conflict_member:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"The email '{conflict_member}' has already been registered as a team member for this event.",
+        )
+
+    # D. Check for existing PENDING registrations with 2-minute real-time Cashfree guard
+    pending_regs_res = await db.execute(
+        select(Registration)
+        .where(
+            Registration.event_id == event.id,
+            func.lower(Registration.primary_email).in_(all_emails),
+            Registration.payment_status == PaymentStatus.PENDING.value,
+        )
+        .order_by(Registration.created_at.desc())
+    )
+    pending_regs = pending_regs_res.scalars().all()
+
+    pending_member_res = await db.execute(
+        select(Registration)
+        .join(TeamMember, TeamMember.registration_id == Registration.id)
+        .where(
+            Registration.event_id == event.id,
+            func.lower(TeamMember.email).in_(all_emails),
+            Registration.payment_status == PaymentStatus.PENDING.value,
+        )
+        .order_by(Registration.created_at.desc())
+    )
+    pending_member_regs = pending_member_res.scalars().all()
+
+    # Combine unique pending registrations
+    all_pending_dict = {r.id: r for r in (pending_regs + pending_member_regs)}
+    now_utc = datetime.now(timezone.utc)
+
+    for p_reg in all_pending_dict.values():
+        created_time = p_reg.created_at
+        if created_time.tzinfo is None:
+            created_time = created_time.replace(tzinfo=timezone.utc)
+        age_seconds = (now_utc - created_time).total_seconds()
+
+        # Check latest status from Cashfree for the pending order
+        order_res = await db.execute(
+            select(PaymentOrder)
+            .where(PaymentOrder.registration_id == p_reg.id)
+            .order_by(PaymentOrder.created_at.desc())
+        )
+        p_order = order_res.scalars().first()
+
+        if p_order and p_order.cf_order_id:
+            try:
+                cf_data = await cashfree_service.get_order_status(p_order.cf_order_id)
+                cf_status = str(cf_data.get("order_status", "")).upper()
+                if cf_status == "PAID":
+                    p_order.payment_status = PaymentOrderStatus.PAID.value
+                    p_reg.payment_status = PaymentStatus.SUCCESS.value
+                    await db.commit()
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Payment for '{p_reg.primary_email}' has already been received! Confirmed pass code: {p_reg.registration_code}.",
+                    )
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.warning(f"Could not verify Cashfree status for order {p_order.cf_order_id}: {e}")
+
+        # If order was created within the last 2 minutes (120 seconds), protect user from double charging
+        if age_seconds < 120:
+            remaining_secs = max(1, int(120 - age_seconds))
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"A payment attempt for '{p_reg.primary_email}' is currently in progress. If money was debited from your account, please wait and check your status. Otherwise, you can retry in {remaining_secs}s.",
+            )
+        else:
+            # Older than 2 minutes: safely consider abandoned
+            p_reg.payment_status = PaymentStatus.FAILED.value
+            if p_order and p_order.payment_status == PaymentOrderStatus.ACTIVE.value:
+                p_order.payment_status = PaymentOrderStatus.EXPIRED.value
+
+    # 4. Create Registration Record
     registration_code = await get_unique_registration_code(db)
     total_amount = event.registration_fee
     is_offline = (reg_in.payment_mode or "").upper() == "OFFLINE"

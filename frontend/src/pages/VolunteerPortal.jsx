@@ -822,11 +822,25 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
     }
 
     if (isManualTeam) {
+      const primaryEmailClean = manualForm.primary_email.trim().toLowerCase();
+      const seenTm = new Set();
       for (let i = 0; i < manualForm.team_members.length; i++) {
         const tm = manualForm.team_members[i];
         if (tm.phone.replace(/\D/g, '').length < 10) {
           toast.error(`Please enter a valid 10-digit mobile number for Teammate #${i + 1}`);
           return;
+        }
+        const tmEmail = tm.email.trim().toLowerCase();
+        if (tmEmail && tmEmail === primaryEmailClean) {
+          toast.error(`Primary participant email cannot also be added as a teammate`);
+          return;
+        }
+        if (tmEmail) {
+          if (seenTm.has(tmEmail)) {
+            toast.error(`Duplicate teammate email: ${tmEmail}`);
+            return;
+          }
+          seenTm.add(tmEmail);
         }
       }
     }
