@@ -629,12 +629,48 @@ body {
   margin-bottom: 1.25rem;
 }
 
+.event-select-container {
+  position: relative;
+  flex: 1 1 280px;
+  min-width: 240px;
+}
+
+.responsive-filter-pills-container {
+  flex: 2 1 380px;
+}
+
 @media (max-width: 768px) {
   .responsive-filter-bar {
-    padding: 1rem !important;
+    padding: 0.75rem 0.85rem !important;
     flex-direction: column !important;
     align-items: stretch !important;
-    gap: 1rem !important;
+    gap: 0.65rem !important;
+    margin-bottom: 1rem !important;
+  }
+  .event-select-container {
+    min-width: 0 !important;
+    width: 100% !important;
+    flex: none !important;
+  }
+  .responsive-filter-pills-container {
+    flex: none !important;
+    width: 100% !important;
+    min-height: auto !important;
+  }
+  .event-select-label {
+    display: none !important; /* Reclaims critical screen height on mobile */
+  }
+  .event-select-btn {
+    min-height: 38px !important;
+    padding: 0.45rem 0.75rem !important;
+    font-size: 0.84rem !important;
+  }
+  .event-badge-mobile-hide {
+    display: none !important;
+  }
+  .responsive-filter-pills-label {
+    font-size: 0.65rem !important;
+    margin-bottom: 0.15rem !important;
   }
 }
 
@@ -783,5 +819,14 @@ body {
     padding: 1.25rem 1rem !important;
     border-radius: 18px !important;
   }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spin-icon {
+  animation: spin 0.8s linear infinite;
 }
 

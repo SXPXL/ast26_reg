@@ -64,13 +64,14 @@ class RegistrationSummary(BaseModel):
     attended_at: Optional[datetime] = None
     marked_by_name: Optional[str] = None
     created_at: datetime
+    team_members: List[TeamMemberResponse] = []
 
     class Config:
         from_attributes = True
 
 
 class RegistrationDetailResponse(RegistrationSummary):
-    team_members: List[TeamMemberResponse] = []
+    pass
 
 
 class AttendanceUpdateRequest(BaseModel):

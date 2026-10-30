@@ -310,7 +310,6 @@ export default function VolunteerPage() {
             boxShadow: 'var(--neu-shadow-flat)',
           }}>
             <div style={{ position: 'relative', flex: '1 1 300px' }}>
-              <Search size={18} color="var(--text-muted)" style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)' }} />
               <input
                 type="text"
                 placeholder="Search participant name, phone, code (e.g. ATHRA-2026), team..."
@@ -318,6 +317,19 @@ export default function VolunteerPage() {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="neu-input"
                 style={{ paddingLeft: '2.8rem' }}
+              />
+              <Search
+                size={18}
+                style={{
+                  position: 'absolute',
+                  left: '1rem',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: 'var(--gold-bright)',
+                  opacity: 0.9,
+                  pointerEvents: 'none',
+                  zIndex: 2,
+                }}
               />
             </div>
 
@@ -395,9 +407,8 @@ export default function VolunteerPage() {
                     {/* Actions: View Details & Mark Attendance */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                       <button
-                        onClick={async () => {
-                          const full = await api.getRegistration(reg.id);
-                          setInspectRegistration(full);
+                        onClick={() => {
+                          setInspectRegistration(reg);
                         }}
                         className="neu-btn"
                         style={{ fontSize: '0.75rem', padding: '0.55rem 0.85rem' }}

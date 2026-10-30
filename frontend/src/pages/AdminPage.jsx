@@ -716,9 +716,8 @@ export default function AdminPage({ onBackToHome }) {
                         </td>
                         <td style={{ padding: '0.75rem' }}>
                           <button
-                            onClick={async () => {
-                              const full = await api.getRegistration(r.id);
-                              setInspectRegistration(full);
+                            onClick={() => {
+                              setInspectRegistration(r);
                             }}
                             className="neu-btn"
                             style={{ fontSize: '0.72rem', padding: '0.4rem 0.7rem' }}

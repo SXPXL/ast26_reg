@@ -351,6 +351,7 @@ async def list_registrations(
     """
     query = select(Registration).options(
         selectinload(Registration.event),
+        selectinload(Registration.team_members),
         selectinload(Registration.marked_by_volunteer),
     )
 
@@ -374,7 +375,7 @@ async def list_registrations(
             # If viewing a specific event check-in roster without explicit payment filter, default to SUCCESS
             query = query.where(Registration.payment_status == PaymentStatus.SUCCESS.value)
 
-    if event_id:
+    if event_id and event_id.upper() != "ALL":
         query = query.where(Registration.event_id == event_id)
     if payment_mode and payment_mode.upper() != "ALL":
         query = query.where(Registration.payment_mode == payment_mode.upper())
