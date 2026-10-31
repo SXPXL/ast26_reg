@@ -5,6 +5,7 @@ import { useToast } from '../context/ToastContext';
 import DigitalTicketPass from '../components/DigitalTicketPass';
 import LoadingOverlay from '../components/LoadingOverlay';
 import AsthraLogo from '../components/AsthraLogo';
+import AsthraSelect from '../components/AsthraSelect';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   CheckCircle,
@@ -2011,52 +2012,36 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
                       )}
                     </div>
 
-                    {/* Payment Mode Selector: Dropdown with Luxury Styling */}
+                    {/* Payment Mode Selector: Luxury Custom Dropdown */}
                     <div>
                       <label style={{ fontSize: '0.72rem', fontWeight: '700', color: 'var(--gold-bright)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.45rem', display: 'block' }}>
                         Payment Method *
                       </label>
-                      <select
+                      <AsthraSelect
                         value={manualPaymentMode}
-                        onChange={(e) => setManualPaymentMode(e.target.value)}
-                        style={{
-                          width: '100%',
-                          height: '46px',
-                          background: '#0d0d16',
-                          border: '1px solid rgba(212, 175, 55, 0.35)',
-                          borderRadius: '12px',
-                          padding: '0.65rem 2.6rem 0.65rem 1rem',
-                          fontSize: '0.88rem',
-                          fontWeight: '600',
-                          color: 'var(--text-white)',
-                          appearance: 'none',
-                          WebkitAppearance: 'none',
-                          MozAppearance: 'none',
-                          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23D4AF37' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
-                          backgroundRepeat: 'no-repeat',
-                          backgroundPosition: 'right 0.95rem center',
-                          backgroundSize: '16px',
-                          outline: 'none',
-                          boxShadow: 'var(--glass-shadow-inset)',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s ease',
-                        }}
-                        onFocus={(e) => {
-                          e.currentTarget.style.borderColor = 'var(--gold-bright)';
-                          e.currentTarget.style.boxShadow = '0 0 14px rgba(212, 175, 55, 0.25)';
-                        }}
-                        onBlur={(e) => {
-                          e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.35)';
-                          e.currentTarget.style.boxShadow = 'var(--glass-shadow-inset)';
-                        }}
-                      >
-                        <option value="OFFLINE" style={{ background: '#0d0d16', color: '#f3f4f6', padding: '0.5rem' }}>
-                          💵 Cash / Desk (Collect Physical Cash)
-                        </option>
-                        <option value="ONLINE" style={{ background: '#0d0d16', color: '#f3f4f6', padding: '0.5rem' }}>
-                          💳 Online Gateway (Scan QR / UPI on Phone)
-                        </option>
-                      </select>
+                        onChange={(val) => setManualPaymentMode(val)}
+                        height="46px"
+                        options={[
+                          {
+                            value: 'OFFLINE',
+                            label: 'Cash / Desk (Collect Physical Cash)',
+                            shortLabel: 'Cash / Desk (Physical Cash)',
+                            icon: Banknote,
+                            color: '#10B981',
+                            badge: 'Instant Pass',
+                            badgeColor: '#10B981',
+                          },
+                          {
+                            value: 'ONLINE',
+                            label: 'Online Gateway (Scan QR / UPI on Phone)',
+                            shortLabel: 'Online Gateway (Cashfree UPI / QR)',
+                            icon: QrCode,
+                            color: '#60A5FA',
+                            badge: 'Dynamic QR',
+                            badgeColor: '#60A5FA',
+                          },
+                        ]}
+                      />
 
                       {manualPaymentMode === 'OFFLINE' && manualFee > 0 && (
                         <div
@@ -2517,36 +2502,23 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
               <label style={{ fontSize: '0.72rem', fontWeight: '600', color: 'var(--gold-bright)', display: 'block', marginBottom: '0.35rem', letterSpacing: '0.04em' }}>
                 Event
               </label>
-              <select
+              <AsthraSelect
                 value={participantFilterEvent}
-                onChange={(e) => setParticipantFilterEvent(e.target.value)}
-                style={{
-                  width: '100%',
-                  height: '42px',
-                  background: '#0d0d16',
-                  border: '1px solid rgba(212, 175, 55, 0.35)',
-                  borderRadius: '12px',
-                  padding: '0.55rem 2.2rem 0.55rem 0.85rem',
-                  fontSize: '0.82rem',
-                  fontWeight: '600',
-                  color: 'var(--text-white)',
-                  appearance: 'none',
-                  WebkitAppearance: 'none',
-                  MozAppearance: 'none',
-                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23D4AF37' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
-                  backgroundRepeat: 'no-repeat',
-                  backgroundPosition: 'right 0.75rem center',
-                  backgroundSize: '15px',
-                  outline: 'none',
-                  boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
-                  cursor: 'pointer',
-                }}
-              >
-                <option value="ALL" style={{ background: '#0d0d16', color: '#f3f4f6' }}>All Events</option>
-                {allEvents.map((e) => (
-                  <option key={e.id} value={e.id} style={{ background: '#0d0d16', color: '#f3f4f6' }}>{e.title}</option>
-                ))}
-              </select>
+                onChange={(val) => setParticipantFilterEvent(val)}
+                searchable={true}
+                searchPlaceholder="Search event..."
+                icon={Calendar}
+                options={[
+                  { value: 'ALL', label: 'All Events', shortLabel: 'All Events', icon: Calendar },
+                  ...allEvents.map((e) => ({
+                    value: e.id,
+                    label: e.title,
+                    icon: Calendar,
+                    badge: e.event_type === 'TEAM' ? 'Team' : 'Solo',
+                    badgeColor: e.event_type === 'TEAM' ? '#8B5CF6' : '#10B981',
+                  })),
+                ]}
+              />
             </div>
 
             {/* Attendance Status Filter */}
@@ -2554,36 +2526,17 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
               <label style={{ fontSize: '0.72rem', fontWeight: '600', color: 'var(--gold-bright)', display: 'block', marginBottom: '0.35rem', letterSpacing: '0.04em' }}>
                 Check-In Status
               </label>
-              <select
+              <AsthraSelect
                 value={participantFilterAttendance}
-                onChange={(e) => setParticipantFilterAttendance(e.target.value)}
-                style={{
-                  width: '100%',
-                  height: '42px',
-                  background: '#0d0d16',
-                  border: '1px solid rgba(212, 175, 55, 0.35)',
-                  borderRadius: '12px',
-                  padding: '0.55rem 2.2rem 0.55rem 0.85rem',
-                  fontSize: '0.82rem',
-                  fontWeight: '600',
-                  color: 'var(--text-white)',
-                  appearance: 'none',
-                  WebkitAppearance: 'none',
-                  MozAppearance: 'none',
-                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23D4AF37' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
-                  backgroundRepeat: 'no-repeat',
-                  backgroundPosition: 'right 0.75rem center',
-                  backgroundSize: '15px',
-                  outline: 'none',
-                  boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
-                  cursor: 'pointer',
-                }}
-              >
-                <option value="ALL" style={{ background: '#0d0d16', color: '#f3f4f6' }}>All (Active Participants)</option>
-                <option value="PRESENT" style={{ background: '#0d0d16', color: '#f3f4f6' }}>Checked In / Present</option>
-                <option value="NOT_ATTENDED" style={{ background: '#0d0d16', color: '#f3f4f6' }}>Not Entered</option>
-                <option value="HIDDEN" style={{ background: '#0d0d16', color: '#f3f4f6' }}>Hidden</option>
-              </select>
+                onChange={(val) => setParticipantFilterAttendance(val)}
+                icon={Shield}
+                options={[
+                  { value: 'ALL', label: 'All (Active Participants)', shortLabel: 'All Check-in Statuses', icon: Shield },
+                  { value: 'PRESENT', label: 'Checked In / Present', icon: CheckCircle2, color: '#10B981', badge: 'Checked In', badgeColor: '#10B981' },
+                  { value: 'NOT_ATTENDED', label: 'Not Entered', icon: Clock, color: '#F59E0B', badge: 'Pending', badgeColor: '#F59E0B' },
+                  { value: 'HIDDEN', label: 'Hidden / Flagged', icon: EyeOff, color: '#EF4444', badge: 'Hidden', badgeColor: '#EF4444' },
+                ]}
+              />
             </div>
 
             {/* Payment Mode Filter */}
@@ -2591,35 +2544,16 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
               <label style={{ fontSize: '0.72rem', fontWeight: '600', color: 'var(--gold-bright)', display: 'block', marginBottom: '0.35rem', letterSpacing: '0.04em' }}>
                 Payment Mode
               </label>
-              <select
+              <AsthraSelect
                 value={participantFilterPaymentMode}
-                onChange={(e) => setParticipantFilterPaymentMode(e.target.value)}
-                style={{
-                  width: '100%',
-                  height: '42px',
-                  background: '#0d0d16',
-                  border: '1px solid rgba(212, 175, 55, 0.35)',
-                  borderRadius: '12px',
-                  padding: '0.55rem 2.2rem 0.55rem 0.85rem',
-                  fontSize: '0.82rem',
-                  fontWeight: '600',
-                  color: 'var(--text-white)',
-                  appearance: 'none',
-                  WebkitAppearance: 'none',
-                  MozAppearance: 'none',
-                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23D4AF37' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
-                  backgroundRepeat: 'no-repeat',
-                  backgroundPosition: 'right 0.75rem center',
-                  backgroundSize: '15px',
-                  outline: 'none',
-                  boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
-                  cursor: 'pointer',
-                }}
-              >
-                <option value="ALL" style={{ background: '#0d0d16', color: '#f3f4f6' }}>All Payment Modes</option>
-                <option value="OFFLINE" style={{ background: '#0d0d16', color: '#f3f4f6' }}>Offline Cash</option>
-                <option value="ONLINE" style={{ background: '#0d0d16', color: '#f3f4f6' }}>Online Gateway</option>
-              </select>
+                onChange={(val) => setParticipantFilterPaymentMode(val)}
+                icon={CreditCard}
+                options={[
+                  { value: 'ALL', label: 'All Payment Modes', shortLabel: 'All Payment Modes', icon: CreditCard },
+                  { value: 'OFFLINE', label: 'Offline Cash', icon: Banknote, color: '#10B981', badge: 'Desk Cash', badgeColor: '#10B981' },
+                  { value: 'ONLINE', label: 'Online Gateway', icon: QrCode, color: '#60A5FA', badge: 'Cashfree', badgeColor: '#60A5FA' },
+                ]}
+              />
             </div>
 
             {/* Payment Status Filter */}
@@ -2627,36 +2561,17 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
               <label style={{ fontSize: '0.72rem', fontWeight: '600', color: 'var(--gold-bright)', display: 'block', marginBottom: '0.35rem', letterSpacing: '0.04em' }}>
                 Payment Status
               </label>
-              <select
+              <AsthraSelect
                 value={participantFilterPaymentStatus}
-                onChange={(e) => setParticipantFilterPaymentStatus(e.target.value)}
-                style={{
-                  width: '100%',
-                  height: '42px',
-                  background: '#0d0d16',
-                  border: '1px solid rgba(212, 175, 55, 0.35)',
-                  borderRadius: '12px',
-                  padding: '0.55rem 2.2rem 0.55rem 0.85rem',
-                  fontSize: '0.82rem',
-                  fontWeight: '600',
-                  color: 'var(--text-white)',
-                  appearance: 'none',
-                  WebkitAppearance: 'none',
-                  MozAppearance: 'none',
-                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23D4AF37' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
-                  backgroundRepeat: 'no-repeat',
-                  backgroundPosition: 'right 0.75rem center',
-                  backgroundSize: '15px',
-                  outline: 'none',
-                  boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
-                  cursor: 'pointer',
-                }}
-              >
-                <option value="SUCCESS" style={{ background: '#0d0d16', color: '#10B981', fontWeight: '700' }}>✓ Confirmed (Paid)</option>
-                <option value="ALL" style={{ background: '#0d0d16', color: '#f3f4f6' }}>All Statuses</option>
-                <option value="PENDING" style={{ background: '#0d0d16', color: '#F59E0B' }}>⏳ Payment Pending</option>
-                <option value="FAILED" style={{ background: '#0d0d16', color: '#EF4444' }}>✕ Payment Failed</option>
-              </select>
+                onChange={(val) => setParticipantFilterPaymentStatus(val)}
+                icon={Filter}
+                options={[
+                  { value: 'SUCCESS', label: '✓ Confirmed (Paid)', shortLabel: 'Confirmed (Paid)', icon: CheckCircle2, color: '#10B981', badge: 'Active Pass', badgeColor: '#10B981' },
+                  { value: 'ALL', label: 'All Statuses', shortLabel: 'All Statuses', icon: Filter },
+                  { value: 'PENDING', label: '⏳ Payment Pending', shortLabel: 'Payment Pending', icon: Clock, color: '#F59E0B', badge: 'Pending', badgeColor: '#F59E0B' },
+                  { value: 'FAILED', label: '✕ Payment Failed', shortLabel: 'Payment Failed', icon: AlertCircle, color: '#EF4444', badge: 'Failed', badgeColor: '#EF4444' },
+                ]}
+              />
             </div>
 
             {/* Search Input */}
@@ -3767,27 +3682,19 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
                   </div>
 
                   {/* Sort selector */}
-                  <select
+                  <AsthraSelect
                     value={analyticsSortBy}
-                    onChange={(e) => setAnalyticsSortBy(e.target.value)}
-                    style={{
-                      height: '38px',
-                      background: 'var(--bg-inset)',
-                      border: '1px solid rgba(212, 175, 55, 0.3)',
-                      borderRadius: '10px',
-                      color: 'var(--text-white)',
-                      fontSize: '0.78rem',
-                      fontWeight: '600',
-                      padding: '0 0.85rem',
-                      outline: 'none',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <option value="revenue_desc">Sort: Highest Revenue</option>
-                    <option value="regs_desc">Sort: Most Registrations</option>
-                    <option value="turnout_desc">Sort: Highest Turnout %</option>
-                    <option value="title_asc">Sort: Event Name (A-Z)</option>
-                  </select>
+                    onChange={(val) => setAnalyticsSortBy(val)}
+                    height="38px"
+                    minWidth="230px"
+                    icon={TrendingUp}
+                    options={[
+                      { value: 'revenue_desc', label: 'Sort: Highest Revenue' },
+                      { value: 'regs_desc', label: 'Sort: Most Registrations' },
+                      { value: 'turnout_desc', label: 'Sort: Highest Turnout %' },
+                      { value: 'title_asc', label: 'Sort: Event Name (A-Z)' },
+                    ]}
+                  />
                 </div>
               </div>
 
@@ -4405,14 +4312,15 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div>
                   <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.3rem', display: 'block' }}>Event Type</label>
-                  <select
+                  <AsthraSelect
                     value={eventForm.event_type}
-                    onChange={(e) => setEventForm({ ...eventForm, event_type: e.target.value })}
-                    className="neu-input"
-                  >
-                    <option value="INDIVIDUAL">Individual / Solo</option>
-                    <option value="TEAM">Group / Team</option>
-                  </select>
+                    onChange={(val) => setEventForm({ ...eventForm, event_type: val })}
+                    height="42px"
+                    options={[
+                      { value: 'INDIVIDUAL', label: 'Individual / Solo', badge: 'Solo', icon: UserPlus },
+                      { value: 'TEAM', label: 'Group / Team', badge: 'Team', icon: Users },
+                    ]}
+                  />
                 </div>
 
                 <div>

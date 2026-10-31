@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import AdminNavbar from '../components/AdminNavbar';
+import AsthraSelect from '../components/AsthraSelect';
 import {
   ShieldCheck,
   TrendingUp,
@@ -639,18 +640,26 @@ export default function AdminPage({ onBackToHome }) {
               Registrations & Participants Roster ({registrations.length})
             </h3>
 
-            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-              <select
-                value={regFilterEventId}
-                onChange={(e) => setRegFilterEventId(e.target.value)}
-                className="neu-input"
-                style={{ width: '220px', fontSize: '0.8rem', padding: '0.55rem' }}
-              >
-                <option value="">All Events</option>
-                {events.map((ev) => (
-                  <option key={ev.id} value={ev.id}>{ev.title}</option>
-                ))}
-              </select>
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <div style={{ width: '220px' }}>
+                <AsthraSelect
+                  value={regFilterEventId}
+                  onChange={(val) => setRegFilterEventId(val)}
+                  searchable={true}
+                  searchPlaceholder="Filter event..."
+                  icon={Calendar}
+                  options={[
+                    { value: '', label: 'All Events', shortLabel: 'All Events', icon: Calendar },
+                    ...events.map((ev) => ({
+                      value: ev.id,
+                      label: ev.title,
+                      icon: Calendar,
+                      badge: ev.event_type === 'TEAM' ? 'Team' : 'Solo',
+                      badgeColor: ev.event_type === 'TEAM' ? '#8B5CF6' : '#10B981',
+                    })),
+                  ]}
+                />
+              </div>
 
               {regFilterEventId && (
                 <a
@@ -789,14 +798,15 @@ export default function AdminPage({ onBackToHome }) {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
                 <div>
                   <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.3rem', display: 'block' }}>Event Type</label>
-                  <select
+                  <AsthraSelect
                     value={eventForm.event_type}
-                    onChange={(e) => setEventForm({ ...eventForm, event_type: e.target.value })}
-                    className="neu-input"
-                  >
-                    <option value="INDIVIDUAL">Individual</option>
-                    <option value="TEAM">Team</option>
-                  </select>
+                    onChange={(val) => setEventForm({ ...eventForm, event_type: val })}
+                    height="42px"
+                    options={[
+                      { value: 'INDIVIDUAL', label: 'Individual / Solo', badge: 'Solo', icon: UserPlus },
+                      { value: 'TEAM', label: 'Group / Team', badge: 'Team', icon: Users },
+                    ]}
+                  />
                 </div>
                 <div>
                   <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.3rem', display: 'block' }}>Min Team Size</label>

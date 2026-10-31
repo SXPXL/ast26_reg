@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/athra_fest_db"
     SYNC_DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/athra_fest_db"
 
+    @field_validator("DATABASE_URL", "SYNC_DATABASE_URL", mode="before")
+    @classmethod
+    def strip_db_urls(cls, v: str) -> str:
+        return v.strip() if isinstance(v, str) else v
+
     # Cashfree PG
     CASHFREE_APP_ID: str = "TEST_CASHFREE_APP_ID"
     CASHFREE_SECRET_KEY: str = "TEST_CASHFREE_SECRET_KEY"

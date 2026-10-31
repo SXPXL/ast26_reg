@@ -8,7 +8,7 @@ from app.core.config import settings
 
 
 def _get_engine_config():
-    raw_url = settings.DATABASE_URL
+    raw_url = (settings.DATABASE_URL or "").strip()
     connect_args = {}
 
     if raw_url.startswith("sqlite"):
@@ -27,10 +27,12 @@ def _get_engine_config():
     clean_query = ""
     if parsed.query:
         valid_queries = [
-            q for q in parsed.query.split("&")
-            if q and not any(q.startswith(unsupported) for unsupported in ("sslmode=", "channel_binding="))
+            q.strip() for q in parsed.query.split("&")
+            if q.strip() and not any(q.strip().startswith(unsupported) for unsupported in ("sslmode=", "channel_binding="))
         ]
         clean_query = "&".join(valid_queries)
+
+    clean_path = parsed.path.strip() if parsed.path else ""
 
     # If connecting to an external cloud database (e.g. Neon PostgreSQL)
     if host and not host.startswith("localhost") and not host.startswith("127."):
@@ -39,7 +41,7 @@ def _get_engine_config():
         ctx.verify_mode = ssl.CERT_NONE
         connect_args["ssl"] = ctx
 
-    url = urlunparse((scheme, parsed.netloc, parsed.path, parsed.params, clean_query, parsed.fragment))
+    url = urlunparse((scheme, parsed.netloc, clean_path, parsed.params, clean_query, parsed.fragment))
     return url, connect_args
 
 
