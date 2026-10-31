@@ -12,6 +12,63 @@ import {
   Sparkles,
 } from 'lucide-react';
 
+function formatTextWithLinks(text) {
+  if (!text) return null;
+  const urlRegex = /(https?:\/\/[^\s<>()]+|www\.[^\s<>()]+)/gi;
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = urlRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.substring(lastIndex, match.index));
+    }
+
+    let url = match[0];
+    let trailingPunctuation = '';
+    const trailingMatch = url.match(/[.,;:!?)]+$/);
+    if (trailingMatch) {
+      trailingPunctuation = trailingMatch[0];
+      url = url.slice(0, -trailingPunctuation.length);
+    }
+
+    const href = url.startsWith('http://') || url.startsWith('https://') ? url : `https://${url}`;
+
+    parts.push(
+      <a
+        key={match.index}
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          color: 'var(--gold-bright)',
+          textDecoration: 'underline',
+          fontWeight: '600',
+          wordBreak: 'break-all',
+          transition: 'color 0.15s ease',
+        }}
+        onClick={(e) => e.stopPropagation()}
+        onMouseEnter={(e) => (e.currentTarget.style.color = '#FFF')}
+        onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--gold-bright)')}
+      >
+        {url}
+      </a>
+    );
+
+    if (trailingPunctuation) {
+      parts.push(trailingPunctuation);
+    }
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex));
+  }
+
+  return parts;
+}
+
 export default function EventDetailModal({ event, onClose, onRegister }) {
   if (!event) return null;
 
@@ -143,10 +200,10 @@ export default function EventDetailModal({ event, onClose, onRegister }) {
             marginBottom: '2rem',
           }}>
             <h4 style={{ fontSize: '0.82rem', fontWeight: '700', color: 'var(--gold-bright)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <FileText size={15} /> Rules & Criteria
+              <FileText size={15} /> Click here to read the rules and only register after reading
             </h4>
             <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.6, whiteSpace: 'pre-line' }}>
-              {event.rules}
+              {formatTextWithLinks(event.rules)}
             </div>
           </div>
         )}

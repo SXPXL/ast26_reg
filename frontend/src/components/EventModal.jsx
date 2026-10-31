@@ -21,6 +21,63 @@ import {
   Sparkles,
 } from 'lucide-react';
 
+function formatTextWithLinks(text) {
+  if (!text) return null;
+  const urlRegex = /(https?:\/\/[^\s<>()]+|www\.[^\s<>()]+)/gi;
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = urlRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.substring(lastIndex, match.index));
+    }
+
+    let url = match[0];
+    let trailingPunctuation = '';
+    const trailingMatch = url.match(/[.,;:!?)]+$/);
+    if (trailingMatch) {
+      trailingPunctuation = trailingMatch[0];
+      url = url.slice(0, -trailingPunctuation.length);
+    }
+
+    const href = url.startsWith('http://') || url.startsWith('https://') ? url : `https://${url}`;
+
+    parts.push(
+      <a
+        key={match.index}
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          color: 'var(--gold-bright)',
+          textDecoration: 'underline',
+          fontWeight: '600',
+          wordBreak: 'break-all',
+          transition: 'color 0.15s ease',
+        }}
+        onClick={(e) => e.stopPropagation()}
+        onMouseEnter={(e) => (e.currentTarget.style.color = '#FFF')}
+        onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--gold-bright)')}
+      >
+        {url}
+      </a>
+    );
+
+    if (trailingPunctuation) {
+      parts.push(trailingPunctuation);
+    }
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex));
+  }
+
+  return parts;
+}
+
 export default function EventModal({ event, onClose, onRegistered }) {
   if (!event) return null;
 
@@ -81,6 +138,7 @@ export default function EventModal({ event, onClose, onRegistered }) {
   const [ticketData, setTicketData] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [hasAgreedRules, setHasAgreedRules] = useState(!hasRules);
 
   // Form State with separate department and semester (course removed)
   const [formData, setFormData] = useState(() => {
@@ -147,6 +205,11 @@ export default function EventModal({ event, onClose, onRegistered }) {
   const handleProceedToConfirm = (e) => {
     e.preventDefault();
     setError(null);
+
+    if (hasRules && !hasAgreedRules) {
+      setError('Please click to read and agree to the event rules before registering.');
+      return;
+    }
 
     const phoneClean = formData.primary_phone.replace(/\D/g, '');
     if (phoneClean.length < 10) {
@@ -438,10 +501,10 @@ export default function EventModal({ event, onClose, onRegistered }) {
               }}
             >
               <div style={{ fontSize: '0.75rem', color: 'var(--gold-bright)', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: '700', marginBottom: '0.65rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <FileText size={14} /> Please Read & Agree to Event Rules
+                <FileText size={14} /> Click here to read the rules and only register after reading
               </div>
               <p style={{ color: 'var(--text-offwhite)', fontSize: '0.9rem', lineHeight: 1.65, whiteSpace: 'pre-line' }}>
-                {event.rules}
+                {formatTextWithLinks(event.rules)}
               </p>
             </div>
 
@@ -449,8 +512,15 @@ export default function EventModal({ event, onClose, onRegistered }) {
               <button onClick={onClose} className="glass-btn" style={{ padding: '0.75rem 1.4rem', fontSize: '0.85rem' }}>
                 Cancel
               </button>
-              <button onClick={() => setStep('form')} className="neu-btn-gold" style={{ padding: '0.85rem 1.85rem', fontSize: '0.88rem' }}>
-                <span>I Agree & Proceed</span>
+              <button
+                onClick={() => {
+                  setHasAgreedRules(true);
+                  setStep('form');
+                }}
+                className="neu-btn-gold"
+                style={{ padding: '0.85rem 1.85rem', fontSize: '0.88rem' }}
+              >
+                <span>I Have Read the Rules & Proceed to Register</span>
                 <ChevronRight size={16} />
               </button>
             </div>
@@ -464,21 +534,40 @@ export default function EventModal({ event, onClose, onRegistered }) {
           <div>
             {hasRules && (
               <button
+                type="button"
                 onClick={() => setStep('rules')}
                 style={{
-                  background: 'none',
-                  border: 'none',
+                  background: 'rgba(212, 175, 55, 0.08)',
+                  border: '1px solid rgba(212, 175, 55, 0.35)',
+                  borderRadius: '12px',
                   color: 'var(--gold-bright)',
                   cursor: 'pointer',
-                  display: 'inline-flex',
+                  display: 'flex',
                   alignItems: 'center',
-                  gap: '0.35rem',
-                  fontSize: '0.8rem',
-                  marginBottom: '1rem',
-                  padding: 0,
+                  gap: '0.6rem',
+                  fontSize: '0.82rem',
+                  fontWeight: '700',
+                  padding: '0.75rem 1rem',
+                  marginBottom: '1.25rem',
+                  width: '100%',
+                  justifyContent: 'space-between',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 10px rgba(0, 0, 0, 0.2)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--gold-bright)';
+                  e.currentTarget.style.background = 'rgba(212, 175, 55, 0.15)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.35)';
+                  e.currentTarget.style.background = 'rgba(212, 175, 55, 0.08)';
                 }}
               >
-                <ArrowLeft size={15} /> Back to Rules
+                <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <FileText size={16} color="#D4AF37" />
+                  <span>Click here to read the rules and only register after reading</span>
+                </span>
+                <ChevronRight size={16} />
               </button>
             )}
 
@@ -902,6 +991,64 @@ export default function EventModal({ event, onClose, onRegistered }) {
                       <span>Add Teammate</span>
                     </button>
                   )}
+                </div>
+              )}
+
+              {/* Rule Agreement Acknowledgment */}
+              {hasRules && (
+                <div
+                  style={{
+                    background: 'rgba(212, 175, 55, 0.06)',
+                    border: hasAgreedRules ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(212, 175, 55, 0.3)',
+                    borderRadius: '12px',
+                    padding: '0.85rem 1.1rem',
+                    marginTop: '1.25rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.75rem',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    id="has-read-rules-check"
+                    checked={hasAgreedRules}
+                    onChange={(e) => setHasAgreedRules(e.target.checked)}
+                    style={{
+                      width: '18px',
+                      height: '18px',
+                      accentColor: '#D4AF37',
+                      cursor: 'pointer',
+                    }}
+                  />
+                  <label
+                    htmlFor="has-read-rules-check"
+                    style={{
+                      fontSize: '0.82rem',
+                      color: 'var(--text-offwhite)',
+                      cursor: 'pointer',
+                      flex: 1,
+                      userSelect: 'none',
+                    }}
+                  >
+                    I have read and agree to the event rules.{' '}
+                    <button
+                      type="button"
+                      onClick={() => setStep('rules')}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--gold-bright)',
+                        fontWeight: '700',
+                        textDecoration: 'underline',
+                        cursor: 'pointer',
+                        padding: 0,
+                        fontSize: '0.82rem',
+                      }}
+                    >
+                      Click here to read the rules
+                    </button>
+                    .
+                  </label>
                 </div>
               )}
 
