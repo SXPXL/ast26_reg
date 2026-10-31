@@ -1,4 +1,4 @@
-# Athra Fest Registration Portal - Backend API
+# Asthra Fest Registration Portal - Backend API
 
 FastAPI-powered registration and event management backend with PostgreSQL, Cashfree Payment Gateway, JWT-based Role-Based Access Control (RBAC), and configurable `REQ_AUTH` toggle.
 
