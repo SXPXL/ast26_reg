@@ -138,7 +138,7 @@ export default function EventModal({ event, onClose, onRegistered }) {
   const [ticketData, setTicketData] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
-  const [hasAgreedRules, setHasAgreedRules] = useState(!hasRules);
+  const [hasAgreedRules, setHasAgreedRules] = useState(false);
 
   // Form State with separate department and semester (course removed)
   const [formData, setFormData] = useState(() => {
@@ -207,7 +207,7 @@ export default function EventModal({ event, onClose, onRegistered }) {
     setError(null);
 
     if (hasRules && !hasAgreedRules) {
-      setError('Please click to read and agree to the event rules before registering.');
+      setError('Please check "I have read and agree to the event rules" to proceed to payment.');
       return;
     }
 
@@ -277,6 +277,12 @@ export default function EventModal({ event, onClose, onRegistered }) {
   // Submit to backend & verify payment
   const handleFinalSubmit = async () => {
     try {
+      if (hasRules && !hasAgreedRules) {
+        setError('Please agree to the event rules before proceeding to payment.');
+        setStep('form');
+        return;
+      }
+
       setSubmitting(true);
       setError(null);
 
@@ -514,7 +520,6 @@ export default function EventModal({ event, onClose, onRegistered }) {
               </button>
               <button
                 onClick={() => {
-                  setHasAgreedRules(true);
                   setStep('form');
                 }}
                 className="neu-btn-gold"
@@ -532,45 +537,6 @@ export default function EventModal({ event, onClose, onRegistered }) {
         {/* ======================================================== */}
         {step === 'form' && (
           <div>
-            {hasRules && (
-              <button
-                type="button"
-                onClick={() => setStep('rules')}
-                style={{
-                  background: 'rgba(212, 175, 55, 0.08)',
-                  border: '1px solid rgba(212, 175, 55, 0.35)',
-                  borderRadius: '12px',
-                  color: 'var(--gold-bright)',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.6rem',
-                  fontSize: '0.82rem',
-                  fontWeight: '700',
-                  padding: '0.75rem 1rem',
-                  marginBottom: '1.25rem',
-                  width: '100%',
-                  justifyContent: 'space-between',
-                  transition: 'all 0.2s ease',
-                  boxShadow: '0 2px 10px rgba(0, 0, 0, 0.2)',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--gold-bright)';
-                  e.currentTarget.style.background = 'rgba(212, 175, 55, 0.15)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.35)';
-                  e.currentTarget.style.background = 'rgba(212, 175, 55, 0.08)';
-                }}
-              >
-                <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <FileText size={16} color="#D4AF37" />
-                  <span>Click here to read the rules and only register after reading</span>
-                </span>
-                <ChevronRight size={16} />
-              </button>
-            )}
-
             {/* Requirement 4: Removed "Participant Registration" text */}
             <div style={{ marginBottom: '1.25rem' }}>
               <h2 className="font-display gold-text-glow" style={{ fontSize: '1.75rem', fontWeight: '800' }}>
@@ -1030,24 +996,7 @@ export default function EventModal({ event, onClose, onRegistered }) {
                       userSelect: 'none',
                     }}
                   >
-                    I have read and agree to the event rules.{' '}
-                    <button
-                      type="button"
-                      onClick={() => setStep('rules')}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: 'var(--gold-bright)',
-                        fontWeight: '700',
-                        textDecoration: 'underline',
-                        cursor: 'pointer',
-                        padding: 0,
-                        fontSize: '0.82rem',
-                      }}
-                    >
-                      Click here to read the rules
-                    </button>
-                    .
+                    I have read and agree to the event rules.
                   </label>
                 </div>
               )}
@@ -1074,8 +1023,16 @@ export default function EventModal({ event, onClose, onRegistered }) {
 
                 <button
                   type="submit"
+                  disabled={hasRules && !hasAgreedRules}
                   className="neu-btn-gold"
-                  style={{ padding: '0.85rem 2rem', fontSize: '0.88rem' }}
+                  style={{
+                    padding: '0.85rem 2rem',
+                    fontSize: '0.88rem',
+                    opacity: hasRules && !hasAgreedRules ? 0.45 : 1,
+                    cursor: hasRules && !hasAgreedRules ? 'not-allowed' : 'pointer',
+                    filter: hasRules && !hasAgreedRules ? 'grayscale(0.5)' : 'none',
+                  }}
+                  title={hasRules && !hasAgreedRules ? 'Please agree to the event rules to proceed' : ''}
                 >
                   <span>Review & Confirm</span>
                   <ChevronRight size={16} />
