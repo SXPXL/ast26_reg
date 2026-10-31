@@ -124,7 +124,7 @@ export default function CheckStatusModal({ isOpen, onClose }) {
           borderRadius: '24px',
           border: '1px solid var(--glass-border)',
           boxShadow: '0 25px 60px rgba(0, 0, 0, 0.85), 0 0 35px rgba(212, 175, 55, 0.15)',
-          maxWidth: selectedPass ? '680px' : '720px',
+          maxWidth: selectedPass ? '860px' : '720px',
           width: '100%',
           maxHeight: '92vh',
           overflowY: 'auto',

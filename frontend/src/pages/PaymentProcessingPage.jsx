@@ -11,12 +11,332 @@ import {
   ArrowLeft, 
   ShieldCheck, 
   Ticket, 
-  RefreshCw 
+  RefreshCw,
+  Download
 } from 'lucide-react';
 import { api } from '../services/api';
-import AsthraLogo from '../components/AsthraLogo';
 import DigitalTicketPass from '../components/DigitalTicketPass';
 import LoadingOverlay from '../components/LoadingOverlay';
+import { ASTHRA_LOGO_BASE64 } from '../assets/asthraLogoBase64';
+
+// Canvas-based horizontal ticket stub generator & downloader (Aztec Gold Theme)
+const downloadPassImage = (ticket) => {
+  if (!ticket || !ticket.registration_code) return;
+
+  const renderAndDownload = (logoImg) => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    // High-resolution landscape ticket dimensions (880 x 340)
+    canvas.width = 880;
+    canvas.height = 340;
+
+    // Background Canvas Outer Fill
+    ctx.fillStyle = '#0B0A10';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Ticket Container Dimensions
+    const tx = 20;
+    const ty = 16;
+    const tw = 840;
+    const th = 308;
+    const r = 18;
+
+    // Rounded Ticket Background
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(tx, ty, tw, th, r);
+    ctx.clip();
+
+    // Dark Aztec Gold Gradient
+    const bgGrad = ctx.createLinearGradient(tx, ty, tx + tw, ty + th);
+    bgGrad.addColorStop(0, '#161420');
+    bgGrad.addColorStop(0.45, '#100f18');
+    bgGrad.addColorStop(1, '#1f190e');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(tx, ty, tw, th);
+
+    // Subtle Ambient Glows
+    const glow1 = ctx.createRadialGradient(200, 80, 10, 200, 80, 220);
+    glow1.addColorStop(0, 'rgba(212, 175, 55, 0.16)');
+    glow1.addColorStop(1, 'transparent');
+    ctx.fillStyle = glow1;
+    ctx.fillRect(tx, ty, tw, th);
+
+    const glow2 = ctx.createRadialGradient(700, 260, 10, 700, 260, 180);
+    glow2.addColorStop(0, 'rgba(245, 158, 11, 0.12)');
+    glow2.addColorStop(1, 'transparent');
+    ctx.fillStyle = glow2;
+    ctx.fillRect(tx, ty, tw, th);
+
+    ctx.restore();
+
+    // Ticket Gold Border
+    ctx.save();
+    ctx.strokeStyle = '#D4AF37';
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.roundRect(tx, ty, tw, th, r);
+    ctx.stroke();
+    ctx.restore();
+
+    // Perforation Divider (at x = 625)
+    const px = 625;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(212, 175, 55, 0.65)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(px, ty + 12);
+    ctx.lineTo(px, ty + th - 12);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+
+    // Punch holes along perforation
+    ctx.fillStyle = '#0B0A10';
+    ctx.strokeStyle = '#D4AF37';
+    ctx.lineWidth = 1.5;
+
+    // Top perforation punch hole
+    ctx.beginPath();
+    ctx.arc(px, ty, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Bottom perforation punch hole
+    ctx.beginPath();
+    ctx.arc(px, ty + th, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Left Edge Semicircular Notch
+    ctx.beginPath();
+    ctx.arc(tx, ty + th / 2, 16, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Right Edge Scalloped Teeth
+    const teethCount = 9;
+    const teethStep = (th - 36) / (teethCount - 1);
+    for (let i = 0; i < teethCount; i++) {
+      const toothY = ty + 18 + i * teethStep;
+      ctx.beginPath();
+      ctx.arc(tx + tw, toothY, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // ════════════════════ MAIN BODY (LEFT) ════════════════════
+    // 1. Top Left: Golden Archer Logo + Fest Name + Event Title
+    if (logoImg && logoImg.complete && logoImg.naturalWidth > 0) {
+      ctx.drawImage(logoImg, tx + 28, ty + 18, 38, 38);
+    } else {
+      ctx.fillStyle = '#D4AF37';
+      ctx.beginPath();
+      ctx.arc(tx + 46, ty + 37, 18, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#0B0A10';
+      ctx.font = 'bold 14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('A', tx + 46, ty + 42);
+    }
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#D4AF37';
+    ctx.font = 'bold 10px sans-serif';
+    ctx.fillText('ASTHRA 2026 FEST', tx + 76, ty + 30);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = '900 18px sans-serif';
+    const eventTitle = (ticket.event_title || 'Fest Event').slice(0, 30);
+    ctx.fillText(eventTitle, tx + 76, ty + 50);
+
+    // Confirmed Badge on top right of main body
+    ctx.fillStyle = 'rgba(34, 197, 94, 0.15)';
+    ctx.strokeStyle = '#22C55E';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(px - 145, ty + 24, 130, 24, 12);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#4ADE80';
+    ctx.font = 'bold 10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('✓ CONFIRMED PASS', px - 80, ty + 40);
+
+    // Dotted line under header
+    ctx.strokeStyle = 'rgba(212, 175, 55, 0.35)';
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(tx + 28, ty + 68);
+    ctx.lineTo(px - 20, ty + 68);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 2. Middle: Participant Name & Registration Code
+    const pName = (ticket.team_name || ticket.participant_name || ticket.user_name || ticket.primary_name || 'Participant').toUpperCase();
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#D4AF37';
+    ctx.font = 'bold 9px sans-serif';
+    ctx.fillText(ticket.team_name ? 'TEAM / PARTICIPANT' : 'PARTICIPANT NAME', tx + 28, ty + 88);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = '900 21px sans-serif';
+    ctx.fillText(pName.slice(0, 24), tx + 28, ty + 114);
+
+    // Registration Code Box
+    ctx.fillStyle = '#D4AF37';
+    ctx.font = 'bold 9px sans-serif';
+    ctx.fillText('REGISTRATION CODE', tx + 360, ty + 88);
+
+    ctx.fillStyle = 'rgba(212, 175, 55, 0.1)';
+    ctx.strokeStyle = 'rgba(212, 175, 55, 0.45)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(tx + 360, ty + 94, 215, 34, 6);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = '900 17px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(ticket.registration_code || 'ATHRA-2026', tx + 467, ty + 117);
+
+    // Dotted line before bottom card
+    ctx.strokeStyle = 'rgba(212, 175, 55, 0.35)';
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(tx + 28, ty + 144);
+    ctx.lineTo(px - 20, ty + 144);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 3. Bottom Card: Venue (replacing barcode) & Registration Fee
+    const bx = tx + 28;
+    const by = ty + 160;
+    const bw = px - tx - 48;
+    const bh = 118;
+
+    ctx.save();
+    ctx.fillStyle = '#FAF8F0';
+    ctx.beginPath();
+    ctx.roundRect(bx, by, bw, bh, 12);
+    ctx.fill();
+    ctx.restore();
+
+    // Venue Icon & Details
+    ctx.fillStyle = 'rgba(212, 175, 55, 0.18)';
+    ctx.beginPath();
+    ctx.arc(bx + 42, by + bh / 2, 22, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#AA820A';
+    ctx.font = 'bold 18px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('📍', bx + 42, by + bh / 2 + 6);
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#777777';
+    ctx.font = 'bold 9px sans-serif';
+    ctx.fillText('VENUE / EVENT LOCATION', bx + 78, by + bh / 2 - 12);
+
+    ctx.fillStyle = '#111018';
+    ctx.font = '900 17px sans-serif';
+    const venueStr = (ticket.venue || 'Campus Main Arena').slice(0, 30);
+    ctx.fillText(venueStr, bx + 78, by + bh / 2 + 10);
+
+    // Vertical Divider inside bottom card
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(bx + bw - 190, by + 16);
+    ctx.lineTo(bx + bw - 190, by + bh - 16);
+    ctx.stroke();
+
+    // Registration Fee
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#777777';
+    ctx.font = 'bold 9px sans-serif';
+    ctx.fillText('REGISTRATION FEE', bx + bw - 24, by + bh / 2 - 14);
+
+    const rawFee = ticket.amount_paid ?? ticket.registration_fee ?? ticket.fee ?? ticket.amount ?? 0;
+    const numFee = parseFloat(rawFee);
+    const feeDisplay = !isNaN(numFee) && numFee > 0 ? `₹${numFee.toFixed(0)}` : 'FREE';
+
+    ctx.fillStyle = '#0B0A10';
+    ctx.font = '900 22px monospace';
+    ctx.fillText(feeDisplay, bx + bw - 24, by + bh / 2 + 10);
+
+    ctx.fillStyle = '#16A34A';
+    ctx.font = 'bold 10px sans-serif';
+    ctx.fillText('✓ Paid & Confirmed', bx + bw - 24, by + bh / 2 + 28);
+
+    // ════════════════════ RIGHT SIDE (AFTER DOTTED LINES) ════════════════════
+    // Centered Golden Archer Logo & Fest Name in the middle
+    const sx = px + (tx + tw - px) / 2;
+    const sy = ty + th / 2;
+
+    // Archer Logo in the Middle of Right Section
+    if (logoImg && logoImg.complete && logoImg.naturalWidth > 0) {
+      ctx.drawImage(logoImg, sx - 35, sy - 65, 70, 70);
+    } else {
+      ctx.save();
+      ctx.fillStyle = '#D4AF37';
+      ctx.beginPath();
+      ctx.arc(sx, sy - 34, 28, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#0B0A10';
+      ctx.font = 'bold 24px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('A', sx, sy - 26);
+      ctx.restore();
+    }
+
+    // Fest Name in the Middle
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#D4AF37';
+    ctx.font = 'bold 10px sans-serif';
+    ctx.fillText('OFFICIAL PASS', sx, sy + 22);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = '900 18px sans-serif';
+    ctx.fillText('ASTHRA 2026', sx, sy + 42);
+
+    // Trigger Download (Event name followed by the last 6 chars of the registration code)
+    try {
+      const link = document.createElement('a');
+      const rawEvent = (ticket.event_title || ticket.title || 'Event').trim();
+      const safeEvent = rawEvent.replace(/[\\/:*?"<>|]/g, '').trim() || 'Ticket';
+      const rawCode = (ticket.registration_code || ticket.code || '').trim();
+      const last6 = rawCode.length >= 6 ? rawCode.slice(-6) : (rawCode || 'PASS');
+      link.download = `${safeEvent}_${last6}.png`;
+      link.href = canvas.toDataURL('image/png');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.warn('Canvas export error:', err);
+    }
+  };
+
+  let executed = false;
+  const safeRenderAndDownload = (img) => {
+    if (executed) return;
+    executed = true;
+    renderAndDownload(img);
+  };
+
+  const logo = new Image();
+  logo.onload = () => safeRenderAndDownload(logo);
+  logo.onerror = () => safeRenderAndDownload(null);
+  logo.src = ASTHRA_LOGO_BASE64;
+  if (logo.complete) {
+    safeRenderAndDownload(logo);
+  }
+};
 
 export default function PaymentProcessingPage() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -239,6 +559,28 @@ export default function PaymentProcessingPage() {
   const displayRegCode = verifyResult?.registration_code || cachedDetails?.registration_code || '';
   const displayParticipant = verifyResult?.participant_name || cachedDetails?.primary_name || '';
 
+  const activePassData = fullTicket || {
+    registration_code: displayRegCode,
+    primary_name: displayParticipant,
+    event_title: displayEventTitle,
+    college_name: cachedDetails?.college_name || '',
+    department: cachedDetails?.department || '',
+    payment_status: 'SUCCESS',
+    primary_phone: cachedDetails?.primary_phone || '',
+    team_name: cachedDetails?.team_name || '',
+  };
+
+  const autoDownloadedRef = useRef(false);
+
+  useEffect(() => {
+    if (stage === 'success' && displayRegCode && !autoDownloadedRef.current) {
+      autoDownloadedRef.current = true;
+      setTimeout(() => {
+        downloadPassImage(activePassData);
+      }, 500);
+    }
+  }, [stage, displayRegCode, fullTicket, activePassData]);
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -273,7 +615,7 @@ export default function PaymentProcessingPage() {
       <div
         className="payment-card-responsive"
         style={{
-          maxWidth: '520px',
+          maxWidth: (stage === 'initiating' || stage === 'verifying') ? '420px' : '520px',
           width: '100%',
           background: 'rgba(18, 17, 24, 0.95)',
           backdropFilter: 'blur(20px)',
@@ -287,118 +629,97 @@ export default function PaymentProcessingPage() {
         }}
       >
 
-        {/* Fest Header */}
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.75rem', marginBottom: '1.75rem' }}>
-          <AsthraLogo size={36} />
-          <div style={{ textAlign: 'left' }}>
-            <span style={{ fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--gold-bright)', fontWeight: '700' }}>
-              ASTHRA 2026 FEST
-            </span>
-            <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#fff', letterSpacing: '0.05em' }}>
-              SECURE PAYMENT GATEWAY
-            </div>
-          </div>
-        </div>
-
         {/* ─────────────────────────────────────────────────────────────
             STAGE 1: INITIATING (Opening payment gateway...)
            ───────────────────────────────────────────────────────────── */}
         {stage === 'initiating' && (
-          <div>
-            {/* Animated Pulse Icon */}
-            <div style={{
-              width: '84px',
-              height: '84px',
-              borderRadius: '50%',
-              background: 'rgba(212, 175, 55, 0.1)',
-              border: '2px solid rgba(212, 175, 55, 0.4)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              margin: '0 auto 1.5rem',
-              position: 'relative',
-            }}>
-              <div style={{
-                position: 'absolute',
-                inset: '-8px',
-                borderRadius: '50%',
-                border: '1px solid rgba(212, 175, 55, 0.2)',
-                animation: 'spin 4s linear infinite',
-              }} />
-              <Loader2 size={40} className="animate-spin" color="#D4AF37" />
-            </div>
-
-            <h2 className="font-display gold-text-glow" style={{ fontSize: '1.5rem', fontWeight: '800', marginBottom: '0.5rem' }}>
-              Opening Payment Gateway...
+          <div style={{ padding: '0.5rem 0' }}>
+            {/* Title: Text Payment gateway, no logo */}
+            <h2
+              className="font-display gold-text-glow"
+              style={{
+                fontSize: '1.65rem',
+                fontWeight: '800',
+                letterSpacing: '0.02em',
+                margin: 0,
+                color: 'var(--text-white)',
+              }}
+            >
+              Payment gateway
             </h2>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1.5rem', lineHeight: '1.5' }}>
-              Connecting to <strong>Cashfree Secure Checkout</strong>. Please do not close or refresh this tab.
-            </p>
 
-            {/* Event & Amount Summary Card */}
-            <div style={{
-              background: 'rgba(255, 255, 255, 0.03)',
-              border: '1px solid rgba(255, 255, 255, 0.07)',
-              borderRadius: '16px',
-              padding: '1.25rem',
-              marginBottom: '1.75rem',
-              textAlign: 'left',
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>Event</span>
-                <span style={{ color: '#fff', fontSize: '0.85rem', fontWeight: '600' }}>{displayEventTitle}</span>
-              </div>
-              {displayAmount && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                  <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>Amount Payable</span>
-                  <span style={{ color: 'var(--gold-bright)', fontSize: '1.05rem', fontWeight: '800' }}>₹{displayAmount}</span>
-                </div>
-              )}
-              {orderId && (
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>Order Ref</span>
-                  <span className="font-mono" style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{orderId}</span>
-                </div>
-              )}
+            {/* Spinner between text and button area */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                margin: '2.5rem 0',
+              }}
+            >
+              <Loader2
+                size={40}
+                className="animate-spin"
+                color="#D4AF37"
+                style={{ filter: 'drop-shadow(0 0 10px rgba(212, 175, 55, 0.4))' }}
+              />
             </div>
 
-            {/* Mock Mode Helper */}
-            {isMock ? (
-              <div style={{ padding: '1rem', background: 'rgba(212, 175, 55, 0.08)', borderRadius: '14px', border: '1px dashed #D4AF37', marginBottom: '1rem' }}>
-                <div style={{ fontSize: '0.8rem', color: '#D4AF37', fontWeight: '700', marginBottom: '0.6rem' }}>
-                  MOCK TESTING MODE DETECTED
-                </div>
-                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
-                  <button onClick={() => handleSimulateMock(true)} className="neu-btn-gold" style={{ padding: '0.5rem 1rem', fontSize: '0.8rem' }}>
-                    Simulate Success
-                  </button>
-                  <button onClick={() => handleSimulateMock(false)} className="neu-btn-outline" style={{ padding: '0.5rem 1rem', fontSize: '0.8rem', borderColor: '#ef4444', color: '#ef4444' }}>
-                    Simulate Failure
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div>
-                <button
-                  onClick={handleManualOpenGateway}
-                  className="neu-btn-gold"
-                  style={{ width: '100%', padding: '0.8rem', fontSize: '0.9rem', marginBottom: '0.75rem' }}
-                >
-                  Click Here if Gateway Does Not Open Automatically
-                </button>
-                <button
-                  onClick={() => window.location.href = '/'}
-                  style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '0.8rem', cursor: 'pointer' }}
-                >
-                  Cancel & Return to Events
-                </button>
+            {/* Button: Click here if not redirected */}
+            <button
+              onClick={handleManualOpenGateway}
+              className="neu-btn-gold"
+              style={{
+                width: '100%',
+                padding: '0.85rem 1.5rem',
+                fontSize: '0.92rem',
+                fontWeight: '700',
+                borderRadius: '12px',
+              }}
+            >
+              Click here if not redirected
+            </button>
+
+            {/* Order Reference Info */}
+            {orderId && (
+              <div style={{ marginTop: '1.25rem', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                Order Ref: <span className="font-mono" style={{ color: 'var(--gold-bright)', fontWeight: '600' }}>{orderId}</span>
               </div>
             )}
 
-            <div style={{ marginTop: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-              <ShieldCheck size={14} color="#10b981" />
-              <span>256-Bit SSL Encrypted Cashfree Payment Gateway</span>
-            </div>
+            {/* Mock Mode Simulation helper if running in mock sandbox */}
+            {isMock && (
+              <div style={{ marginTop: '1.25rem', display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                <button
+                  onClick={() => handleSimulateMock(true)}
+                  style={{
+                    background: 'rgba(212, 175, 55, 0.1)',
+                    border: '1px solid rgba(212, 175, 55, 0.3)',
+                    color: 'var(--gold-bright)',
+                    padding: '0.35rem 0.75rem',
+                    borderRadius: '8px',
+                    fontSize: '0.75rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Simulate Success
+                </button>
+                <button
+                  onClick={() => handleSimulateMock(false)}
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    color: '#EF4444',
+                    padding: '0.35rem 0.75rem',
+                    borderRadius: '8px',
+                    fontSize: '0.75rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Simulate Failure
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -406,10 +727,14 @@ export default function PaymentProcessingPage() {
             STAGE 2: VERIFYING (Waiting for response - 15s Timer)
            ───────────────────────────────────────────────────────────── */}
         {stage === 'verifying' && (
-          <div>
+          <div style={{ padding: '0.5rem 0' }}>
+            <h2 className="font-display gold-text-glow" style={{ fontSize: '1.65rem', fontWeight: '800', marginBottom: '1.5rem', color: 'var(--text-white)' }}>
+              Verifying payment...
+            </h2>
+
             {/* Countdown Circular Badge */}
-            <div style={{ position: 'relative', width: '100px', height: '100px', margin: '0 auto 1.5rem' }}>
-              <svg width="100" height="100" viewBox="0 0 100 100">
+            <div style={{ position: 'relative', width: '90px', height: '90px', margin: '0 auto 1.5rem' }}>
+              <svg width="90" height="90" viewBox="0 0 100 100">
                 <circle
                   cx="50"
                   cy="50"
@@ -445,49 +770,15 @@ export default function PaymentProcessingPage() {
                 alignItems: 'center',
                 justifyContent: 'center',
               }}>
-                <span className="font-mono" style={{ fontSize: '1.4rem', fontWeight: '800', color: 'var(--gold-bright)' }}>
+                <span className="font-mono" style={{ fontSize: '1.3rem', fontWeight: '800', color: 'var(--gold-bright)' }}>
                   {timeLeft}s
                 </span>
               </div>
             </div>
 
-            <h2 className="font-display gold-text-glow" style={{ fontSize: '1.4rem', fontWeight: '800', marginBottom: '0.5rem' }}>
-              Verifying Payment...
-            </h2>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.5rem', lineHeight: '1.5' }}>
-              Communicating with Cashfree to verify transaction status. Waiting for confirmation ({timeLeft}s remaining)...
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', margin: '0 auto', maxWidth: '340px', lineHeight: 1.5 }}>
+              Please wait while your transaction is being verified with Cashfree.
             </p>
-
-            {/* Dynamic Status Progress Bar */}
-            <div style={{
-              width: '100%',
-              height: '6px',
-              background: 'rgba(255, 255, 255, 0.08)',
-              borderRadius: '999px',
-              overflow: 'hidden',
-              marginBottom: '1.5rem',
-            }}>
-              <div style={{
-                height: '100%',
-                width: `${(timeLeft / 15) * 100}%`,
-                background: 'linear-gradient(90deg, #D4AF37, #F5D061)',
-                transition: 'width 1s linear',
-              }} />
-            </div>
-
-            <div style={{
-              background: 'rgba(255, 255, 255, 0.02)',
-              border: '1px solid rgba(255, 255, 255, 0.06)',
-              borderRadius: '14px',
-              padding: '1rem',
-              fontSize: '0.8rem',
-              color: 'var(--text-secondary)',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', color: '#F5D061' }}>
-                <Loader2 size={16} className="animate-spin" />
-                <span>Checking payment status with Cashfree Gateway</span>
-              </div>
-            </div>
           </div>
         )}
 
@@ -532,7 +823,7 @@ export default function PaymentProcessingPage() {
               Registration Successful!
             </h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
-              Your transaction has been verified by Cashfree and your festival pass is ready.
+              Your transaction has been verified and your pass is ready.
             </p>
 
             {/* Registration Code Showcase */}
@@ -545,7 +836,7 @@ export default function PaymentProcessingPage() {
                 marginBottom: '1.5rem',
               }}>
                 <div style={{ fontSize: '0.7rem', color: 'var(--gold-bright)', textTransform: 'uppercase', letterSpacing: '0.15em', fontWeight: '700', marginBottom: '0.35rem' }}>
-                  Official Registration Code
+                  Registration code
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
                   <span className="font-mono" style={{ fontSize: '1.4rem', fontWeight: '800', color: '#fff', letterSpacing: '0.05em' }}>
@@ -602,7 +893,7 @@ export default function PaymentProcessingPage() {
             {/* Action Buttons */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               <button
-                onClick={() => setShowTicketModal(true)}
+                onClick={() => downloadPassImage(activePassData)}
                 className="neu-btn-gold"
                 style={{
                   width: '100%',
@@ -612,17 +903,30 @@ export default function PaymentProcessingPage() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '0.5rem',
+                  fontWeight: '700',
                 }}
               >
-                <Ticket size={18} />
-                <span>View & Print Entry Pass</span>
+                <Download size={18} />
+                <span>Download Pass</span>
               </button>
               <button
                 onClick={() => window.location.href = '/'}
-                className="neu-btn-outline"
-                style={{ width: '100%', padding: '0.75rem', fontSize: '0.85rem' }}
+                className="neu-btn"
+                style={{
+                  width: '100%',
+                  padding: '0.85rem',
+                  fontSize: '0.9rem',
+                  fontWeight: '700',
+                  color: 'var(--gold-bright)',
+                  borderColor: 'rgba(212, 175, 55, 0.4)',
+                  background: 'rgba(212, 175, 55, 0.08)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                }}
               >
-                Return to Fest Portal
+                <span>Go home</span>
               </button>
             </div>
           </div>
@@ -820,8 +1124,12 @@ export default function PaymentProcessingPage() {
           justifyContent: 'center',
           padding: '1.5rem',
         }}>
-          <div style={{ maxHeight: '90vh', overflowY: 'auto', width: '100%', maxWidth: '700px' }}>
-            <DigitalTicketPass registration={fullTicket} onClose={() => setShowTicketModal(false)} />
+          <div style={{ maxHeight: '90vh', overflowY: 'auto', width: '100%', maxWidth: '860px' }}>
+            <DigitalTicketPass 
+              registration={fullTicket} 
+              onClose={() => setShowTicketModal(false)} 
+              onDownload={() => downloadPassImage(fullTicket)}
+            />
           </div>
         </div>
       )}

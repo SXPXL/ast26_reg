@@ -396,7 +396,7 @@ export default function EventModal({ event, onClose, onRegistered }) {
           borderRadius: '24px',
           border: '1px solid var(--glass-border)',
           boxShadow: '0 25px 60px rgba(0, 0, 0, 0.85), 0 0 35px rgba(212, 175, 55, 0.15)',
-          maxWidth: step === 'ticket' ? '680px' : '650px',
+          maxWidth: step === 'ticket' ? '860px' : '650px',
           width: '100%',
           maxHeight: '92vh',
           overflowY: 'auto',

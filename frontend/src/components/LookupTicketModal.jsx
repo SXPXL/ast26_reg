@@ -47,7 +47,7 @@ export default function LookupTicketModal({ onClose }) {
           borderRadius: '24px',
           border: '1px solid var(--glass-border)',
           boxShadow: '0 25px 60px rgba(0, 0, 0, 0.85), 0 0 30px rgba(212, 175, 55, 0.15), inset 0 1px 1px rgba(255, 255, 255, 0.12)',
-          maxWidth: ticketData ? '680px' : '520px',
+          maxWidth: ticketData ? '860px' : '520px',
           width: '100%',
           maxHeight: '90vh',
           overflowY: 'auto',
