@@ -6,6 +6,7 @@ import HamburgerDrawer from './components/HamburgerDrawer';
 import ParticipantPage from './pages/ParticipantPage';
 import VolunteerPortal from './pages/VolunteerPortal';
 import PaymentProcessingPage from './pages/PaymentProcessingPage';
+import CharityDonationPage from './pages/CharityDonationPage';
 
 function MainApp() {
   // Current route: '/' for participants, '/volunteer' for volunteers/admins, or '/payment/*'
@@ -69,6 +70,11 @@ function MainApp() {
   // Dedicated Cashfree payment gateway flow & verification routes
   if (currentPath.startsWith('/payment/')) {
     return <PaymentProcessingPage />;
+  }
+
+  // Isolated Charity Donation & Payment Portal
+  if (currentPath === '/charity' || currentPath.startsWith('/charity') || currentPath === '/donate') {
+    return <CharityDonationPage />;
   }
 
   return (

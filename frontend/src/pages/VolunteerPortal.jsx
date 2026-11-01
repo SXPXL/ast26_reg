@@ -42,6 +42,7 @@ import {
   Award,
   Activity,
   CheckCircle2,
+  Heart,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -3010,6 +3011,12 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
         const onlinePct = totalRev > 0 ? Math.round((onlineRev / totalRev) * 100) : (stats?.online_registrations_count > 0 ? 100 : 0);
         const offlinePct = totalRev > 0 ? Math.round((offlineRev / totalRev) * 100) : 0;
 
+        const charityDonations = stats?.charity?.total_donations || 0;
+        const charityAmount = parseFloat(stats?.charity?.total_amount || 0);
+        const charityPending = stats?.charity?.pending_donations || 0;
+        const charityFailed = stats?.charity?.failed_donations || 0;
+        const avgDonation = charityDonations > 0 ? Math.round(charityAmount / charityDonations) : 0;
+
         const soloCount = stats?.solo_registrations_count || 0;
         const teamCount = stats?.team_registrations_count || 0;
         const soloPct = totalConf > 0 ? Math.round((soloCount / totalConf) * 100) : 0;
@@ -3284,19 +3291,23 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
                 </div>
               </div>
 
-              {/* Card 5: Top Flagship Event */}
-              <div style={{ background: 'var(--bg-card)', padding: '1.35rem', borderRadius: '18px', border: '1px solid rgba(212, 175, 55, 0.25)', boxShadow: '0 8px 24px rgba(0, 0, 0, 0.35)' }}>
+              {/* Card 5: Charity Donations (Asthra Care) */}
+              <div style={{ background: 'var(--bg-card)', padding: '1.35rem', borderRadius: '18px', border: '1px solid rgba(212, 175, 55, 0.3)', boxShadow: '0 8px 24px rgba(0, 0, 0, 0.35)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: '700', letterSpacing: '0.06em' }}>
-                    Top Event
+                    Charity Fund (Asthra Care)
                   </div>
-                  <Award size={17} color="#D4AF37" />
+                  <Heart size={17} color="#EC4899" fill="rgba(236, 72, 153, 0.25)" />
                 </div>
-                <div style={{ fontSize: '1.15rem', fontWeight: '800', color: 'var(--text-white)', marginTop: '0.45rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={topEvent?.event_title || 'No data'}>
-                  {topEvent ? topEvent.event_title : 'N/A'}
+                <div className="font-mono" style={{ fontSize: '1.85rem', fontWeight: '800', color: '#F472B6', marginTop: '0.35rem' }}>
+                  ₹{charityAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                 </div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--gold-bright)', marginTop: '0.5rem', fontWeight: '700' }}>
-                  {topEvent ? `₹${parseFloat(topEvent.total_revenue || 0).toFixed(0)} (${topEvent.confirmed_paid_registrations || 0} regs)` : 'No registrations yet'}
+                <div style={{ width: '100%', height: '6px', background: 'rgba(255, 255, 255, 0.08)', borderRadius: '999px', overflow: 'hidden', margin: '0.65rem 0 0.5rem 0' }}>
+                  <div style={{ width: charityDonations > 0 ? '100%' : '0%', height: '100%', background: 'linear-gradient(90deg, #EC4899, #F472B6)', borderRadius: '999px' }} />
+                </div>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#F472B6', fontWeight: '700' }}>{charityDonations} {charityDonations === 1 ? 'donation' : 'donations'}</span>
+                  <span style={{ color: 'var(--text-muted)' }}>Avg ₹{avgDonation}</span>
                 </div>
               </div>
             </div>
@@ -3608,6 +3619,57 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
                     {totalParts - soloCount} participants active in squad rosters
                   </div>
                 </div>
+              </div>
+
+              {/* Box 3: Asthra Care Charity Initiative */}
+              <div style={{ background: 'var(--bg-card)', padding: '1.5rem', borderRadius: '18px', border: '1px solid rgba(212, 175, 55, 0.25)', boxShadow: '0 8px 24px rgba(0, 0, 0, 0.35)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem' }}>
+                  <Heart size={18} color="#EC4899" fill="rgba(236, 72, 153, 0.2)" />
+                  <h3 className="font-display gold-text" style={{ fontSize: '1.15rem', fontWeight: '700', margin: 0 }}>
+                    Asthra Care Charity Analytics
+                  </h3>
+                </div>
+
+                {/* Amount Row */}
+                <div style={{ marginBottom: '1.1rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-white)' }}>Total Donated Amount</span>
+                    <span className="font-mono" style={{ fontSize: '1.1rem', fontWeight: '800', color: '#F472B6' }}>
+                      ₹{charityAmount.toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                  <div style={{ width: '100%', height: '8px', background: 'rgba(255, 255, 255, 0.08)', borderRadius: '999px', overflow: 'hidden' }}>
+                    <div style={{ width: charityDonations > 0 ? '100%' : '0%', height: '100%', background: 'linear-gradient(90deg, #EC4899, #F472B6)', borderRadius: '999px' }} />
+                  </div>
+                </div>
+
+                {/* Metrics Breakdown Grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', background: 'var(--bg-inset)', padding: '0.85rem', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                  <div>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: '700' }}>Donations</div>
+                    <div className="font-mono" style={{ fontSize: '1.1rem', fontWeight: '800', color: 'var(--text-white)', marginTop: '0.2rem' }}>
+                      {charityDonations}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: '700' }}>Avg / Donor</div>
+                    <div className="font-mono" style={{ fontSize: '1.1rem', fontWeight: '800', color: 'var(--gold-bright)', marginTop: '0.2rem' }}>
+                      ₹{avgDonation}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: '700' }}>Pending</div>
+                    <div className="font-mono" style={{ fontSize: '1.1rem', fontWeight: '800', color: charityPending > 0 ? '#FBBF24' : 'var(--text-muted)', marginTop: '0.2rem' }}>
+                      {charityPending}
+                    </div>
+                  </div>
+                </div>
+
+                {charityFailed > 0 && (
+                  <div style={{ marginTop: '0.75rem', fontSize: '0.75rem', color: '#EF4444', textAlign: 'right' }}>
+                    {charityFailed} failed transactions
+                  </div>
+                )}
               </div>
             </div>
 

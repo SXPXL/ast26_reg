@@ -5,6 +5,7 @@ from app.api.v1.events import router as events_router
 from app.api.v1.payments import router as payments_router
 from app.api.v1.registrations import router as registrations_router
 from app.api.v1.volunteers import router as volunteers_router
+from app.api.v1.charity import router as charity_router
 
 api_router = APIRouter()
 
@@ -14,3 +15,4 @@ api_router.include_router(volunteers_router)
 api_router.include_router(registrations_router)
 api_router.include_router(payments_router)
 api_router.include_router(admin_stats_router)
+api_router.include_router(charity_router)

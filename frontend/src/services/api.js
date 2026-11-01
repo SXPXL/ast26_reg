@@ -176,6 +176,23 @@ export const api = {
     });
   },
 
+  // Charity Endpoints
+  createCharityDonation: async (donationData) => {
+    return apiRequest('/charity/donate', {
+      method: 'POST',
+      body: JSON.stringify(donationData),
+    });
+  },
+  verifyCharityPayment: async (orderId) => {
+    return apiRequest('/charity/verify', {
+      method: 'POST',
+      body: JSON.stringify({ order_id: orderId }),
+    });
+  },
+  getCharityDonationByCode: async (code) => {
+    return apiRequest(`/charity/code/${code}`);
+  },
+
   // Admin Stats Endpoints
   getOverviewStats: async () => {
     return apiRequest('/admin/stats/overview');

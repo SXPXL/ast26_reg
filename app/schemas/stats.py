@@ -3,6 +3,13 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 
+class CharityStatsItem(BaseModel):
+    total_donations: int = 0
+    total_amount: Decimal = Decimal("0.00")
+    pending_donations: int = 0
+    failed_donations: int = 0
+
+
 class CollegeStatItem(BaseModel):
     college_name: str
     count: int
@@ -56,4 +63,5 @@ class OverallStatsResponse(BaseModel):
     top_departments: List[DepartmentStatItem] = []
     recent_timeline: List[TimelineStatItem] = []
     event_stats: List[EventStatItem]
+    charity: Optional[CharityStatsItem] = None
 

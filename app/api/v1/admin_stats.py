@@ -18,7 +18,9 @@ from app.models.event import Event, EventVolunteer
 from app.models.registration import AttendanceStatus, PaymentStatus, Registration
 from app.models.team_member import TeamMember
 from app.models.user import User, UserRole
+from app.models.charity import CharityDonation, CharityPaymentStatus
 from app.schemas.stats import (
+    CharityStatsItem,
     CollegeStatItem,
     DepartmentStatItem,
     EventStatItem,
@@ -27,6 +29,44 @@ from app.schemas.stats import (
 )
 
 router = APIRouter(prefix="/admin/stats", tags=["Admin Analytics"])
+
+
+async def _get_charity_stats(db: AsyncSession) -> "CharityStatsItem":
+    """Helper: fetch aggregated charity donation stats."""
+    success_count_res = await db.execute(
+        select(func.count(CharityDonation.id)).where(
+            CharityDonation.payment_status == CharityPaymentStatus.SUCCESS.value
+        )
+    )
+    success_count = success_count_res.scalar() or 0
+
+    total_amount_res = await db.execute(
+        select(func.sum(CharityDonation.amount)).where(
+            CharityDonation.payment_status == CharityPaymentStatus.SUCCESS.value
+        )
+    )
+    total_amount = total_amount_res.scalar() or Decimal("0.00")
+
+    pending_res = await db.execute(
+        select(func.count(CharityDonation.id)).where(
+            CharityDonation.payment_status == CharityPaymentStatus.PENDING.value
+        )
+    )
+    pending_count = pending_res.scalar() or 0
+
+    failed_res = await db.execute(
+        select(func.count(CharityDonation.id)).where(
+            CharityDonation.payment_status == CharityPaymentStatus.FAILED.value
+        )
+    )
+    failed_count = failed_res.scalar() or 0
+
+    return CharityStatsItem(
+        total_donations=success_count,
+        total_amount=total_amount,
+        pending_donations=pending_count,
+        failed_donations=failed_count,
+    )
 
 
 @router.get("/overview", response_model=OverallStatsResponse)
@@ -304,8 +344,8 @@ async def get_overview_statistics(
         top_departments=top_departments,
         recent_timeline=recent_timeline,
         event_stats=event_stats_list,
+        charity=await _get_charity_stats(db),
     )
-
 
 @router.get("/export/{event_id}")
 async def export_event_registrations_csv(
