@@ -12,11 +12,13 @@ import {
   ShieldCheck,
   Ticket,
   RefreshCw,
-  Download
+  Download,
+  HelpCircle
 } from 'lucide-react';
 import { api } from '../services/api';
 import DigitalTicketPass from '../components/DigitalTicketPass';
 import LoadingOverlay from '../components/LoadingOverlay';
+import HelpModal from '../components/HelpModal';
 import { ASTHRA_LOGO_BASE64 } from '../assets/asthraLogoBase64';
 
 // Canvas-based horizontal ticket stub generator & downloader (Aztec Gold Theme)
@@ -358,6 +360,7 @@ export default function PaymentProcessingPage() {
   const [fullTicket, setFullTicket] = useState(null);
   const [showTicketModal, setShowTicketModal] = useState(false);
   const [manualRetrying, setManualRetrying] = useState(false);
+  const [helpModalOpen, setHelpModalOpen] = useState(false);
 
   const orderId = initialOrderId || (verifyResult ? verifyResult.order_id : '');
   const isMock = sessionId.startsWith('session_mock_') || initialOrderId.startsWith('MOCK_');
@@ -592,6 +595,48 @@ export default function PaymentProcessingPage() {
       padding: '2rem 1rem',
       position: 'relative',
     }}>
+      {/* Top Right Floating Help Button */}
+      <div style={{
+        position: 'absolute',
+        top: '1.25rem',
+        right: '1.5rem',
+        zIndex: 10,
+      }}>
+        <button
+          onClick={() => setHelpModalOpen(true)}
+          type="button"
+          aria-label="Get Help and Support"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.45rem',
+            padding: '0.45rem 1rem',
+            borderRadius: '9999px',
+            fontSize: '0.82rem',
+            fontWeight: '700',
+            background: 'rgba(212, 175, 55, 0.12)',
+            border: '1.2px solid rgba(212, 175, 55, 0.45)',
+            color: 'var(--gold-bright, #F5D77F)',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            boxShadow: '0 4px 15px rgba(0, 0, 0, 0.4)',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'rgba(212, 175, 55, 0.22)';
+            e.currentTarget.style.borderColor = 'var(--gold-bright)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'rgba(212, 175, 55, 0.12)';
+            e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.45)';
+          }}
+        >
+          <HelpCircle size={15} />
+          <span>Help</span>
+        </button>
+      </div>
+
+      <HelpModal isOpen={helpModalOpen} onClose={() => setHelpModalOpen(false)} />
+
       {/* Loading Overlay for Manual Status Check */}
       <LoadingOverlay
         active={manualRetrying}
