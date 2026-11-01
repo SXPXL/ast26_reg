@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 from app.db.session import get_db
 from app.models.payment import PaymentOrder, PaymentOrderStatus
 from app.models.registration import PaymentStatus, Registration
+from app.models.charity import CharityDonation, CharityPaymentStatus
 from app.schemas.payment import VerifyPaymentRequest, VerifyPaymentResponse
 from app.services.cashfree_service import cashfree_service
 from app.services.registration_service import assign_team_number_if_needed
@@ -164,12 +165,26 @@ async def cashfree_webhook(
                 if payment_order.registration:
                     payment_order.registration.payment_status = PaymentStatus.SUCCESS.value
                     await assign_team_number_if_needed(db, payment_order.registration)
-            elif event_type == "PAYMENT_FAILED_WEBHOOK":
+            elif event_type in ["PAYMENT_FAILED_WEBHOOK", "PAYMENT_USER_DROPPED_WEBHOOK"]:
                 payment_order.payment_status = PaymentOrderStatus.FAILED.value
                 if payment_order.registration:
                     payment_order.registration.payment_status = PaymentStatus.FAILED.value
 
             await db.commit()
+        else:
+            # Check if this order is a charity donation
+            charity_res = await db.execute(
+                select(CharityDonation).where(CharityDonation.cf_order_id == order_id)
+            )
+            donation = charity_res.scalars().first()
+            if donation:
+                donation.gateway_response = payload
+                if event_type == "PAYMENT_SUCCESS_WEBHOOK":
+                    donation.payment_status = CharityPaymentStatus.SUCCESS.value
+                elif event_type in ["PAYMENT_FAILED_WEBHOOK", "PAYMENT_USER_DROPPED_WEBHOOK"]:
+                    donation.payment_status = CharityPaymentStatus.FAILED.value
+
+                await db.commit()
 
         return {"status": "ok"}
     except Exception as e:

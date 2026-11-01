@@ -1,4 +1,4 @@
-const API_BASE = '/api/v1';
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '') + '/api/v1';
 
 /**
  * Generic API request handler with JWT token injection
@@ -198,7 +198,7 @@ export const api = {
     return apiRequest('/admin/stats/overview');
   },
   getExportUrl: (eventId) => {
-    return `/api/v1/admin/stats/export/${eventId}`;
+    return `${API_BASE}/admin/stats/export/${eventId}`;
   },
   downloadRegistrationsExcel: async (params = {}) => {
     const token = localStorage.getItem('athra_token') || localStorage.getItem('token');
@@ -211,7 +211,7 @@ export const api = {
     if (token) query.append('token', token);
 
     const qs = query.toString() ? `?${query.toString()}` : '';
-    const res = await fetch(`/api/v1/admin/stats/export-xlsx${qs}`, {
+    const res = await fetch(`${API_BASE}/admin/stats/export-xlsx${qs}`, {
       headers: {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
