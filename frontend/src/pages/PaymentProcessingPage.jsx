@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Loader2, 
-  CheckCircle2, 
-  XCircle, 
-  Clock, 
-  AlertTriangle, 
-  Copy, 
-  Check, 
-  ExternalLink, 
-  ArrowLeft, 
-  ShieldCheck, 
-  Ticket, 
+import {
+  Loader2,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  AlertTriangle,
+  Copy,
+  Check,
+  ExternalLink,
+  ArrowLeft,
+  ShieldCheck,
+  Ticket,
   RefreshCw,
   Download
 } from 'lucide-react';
@@ -26,7 +26,7 @@ const downloadPassImage = (ticket) => {
   const renderAndDownload = (logoImg) => {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
-    
+
     // High-resolution landscape ticket dimensions (880 x 340)
     canvas.width = 880;
     canvas.height = 340;
@@ -341,7 +341,7 @@ const downloadPassImage = (ticket) => {
 export default function PaymentProcessingPage() {
   const urlParams = new URLSearchParams(window.location.search);
   const isProcessRoute = window.location.pathname.startsWith('/payment/process');
-  
+
   // Params for initiating checkout
   const sessionId = urlParams.get('session_id') || '';
   const initialOrderId = urlParams.get('order_id') || '';
@@ -474,7 +474,7 @@ export default function PaymentProcessingPage() {
           if (clearEventId) {
             try {
               sessionStorage.removeItem(`event_form_${clearEventId}`);
-            } catch (e) {}
+            } catch (e) { }
           }
 
           // Fetch full ticket pass details
@@ -993,7 +993,7 @@ export default function PaymentProcessingPage() {
               <button
                 onClick={handleTryAgain}
                 className="neu-btn-gold"
-                style={{ width: '100%', padding: '0.85rem', fontSize: '0.9rem' }}
+                style={{ width: '100%', padding: '0.85rem', fontSize: '0.9rem', borderRadius: '12px' }}
               >
                 Try Registering Again
               </button>
@@ -1003,15 +1003,16 @@ export default function PaymentProcessingPage() {
                 className="neu-btn-outline"
                 style={{
                   width: '100%',
-                  padding: '0.75rem',
+                  padding: '0.85rem',
                   fontSize: '0.85rem',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '0.4rem',
+                  gap: '0.5rem',
+                  borderRadius: '12px',
                 }}
               >
-                <RefreshCw size={14} className={manualRetrying ? 'animate-spin' : ''} />
+                <RefreshCw size={15} className={manualRetrying ? 'animate-spin' : ''} />
                 <span>Re-Check Payment Status</span>
               </button>
             </div>
@@ -1019,7 +1020,7 @@ export default function PaymentProcessingPage() {
         )}
 
         {/* ─────────────────────────────────────────────────────────────
-            STAGE 5: TIMEOUT (15s Elapsed with No Definite Gateway Result)
+            STAGE 5: TIMEOUT (Pending Confirmation)
            ───────────────────────────────────────────────────────────── */}
         {stage === 'timeout' && (
           <div>
@@ -1040,10 +1041,10 @@ export default function PaymentProcessingPage() {
 
             <div style={{
               display: 'inline-block',
-              padding: '0.3rem 0.8rem',
+              padding: '0.35rem 0.9rem',
               borderRadius: '999px',
               background: 'rgba(245, 158, 11, 0.15)',
-              border: '1px solid rgba(245, 158, 11, 0.3)',
+              border: '1px solid rgba(245, 158, 11, 0.35)',
               color: '#fbbf24',
               fontSize: '0.75rem',
               fontWeight: '700',
@@ -1051,61 +1052,72 @@ export default function PaymentProcessingPage() {
               letterSpacing: '0.1em',
               marginBottom: '0.75rem',
             }}>
-              Verification Timeout (15s)
+              Verification Timeout
             </div>
 
-            <h2 className="font-display gold-text-glow" style={{ fontSize: '1.45rem', fontWeight: '800', marginBottom: '0.5rem' }}>
-              Status Pending Confirmation
-            </h2>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.5rem', lineHeight: '1.6' }}>
-              We waited 15 seconds, but Cashfree has not sent a final payment confirmation yet. 
-              <br /><br />
-              <strong style={{ color: '#fff' }}>Did your money get deducted?</strong>
-              <br />
-              Don't worry! Cashfree will notify our server via asynchronous webhook, and your registration ticket will automatically be confirmed.
-            </p>
+              <h2 className="font-display gold-text-glow" style={{ fontSize: '1.45rem', fontWeight: '800', marginBottom: '0.75rem' }}>
+                Pending Confirmation
+              </h2>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.5rem', lineHeight: '1.6' }}>
+                We waited 15s but couldn't receive a confirmation from the gateway server yet. Please wait and recheck your registration status.
+                <br /><br />
+                <strong style={{ color: '#fff' }}>Did your money get deducted?</strong>
+                <br />
+                Don't worry! You can check your registration status on the home page using your email anytime to know if your payment was successful or failed.
+              </p>
 
-            {orderId && (
-              <div style={{
-                background: 'rgba(255, 255, 255, 0.02)',
-                border: '1px solid rgba(255, 255, 255, 0.06)',
-                borderRadius: '12px',
-                padding: '0.85rem',
-                fontSize: '0.75rem',
-                color: 'var(--text-muted)',
-                marginBottom: '1.5rem',
-              }}>
-                Keep your Order ID for reference: <br />
-                <span className="font-mono" style={{ color: 'var(--gold-bright)', fontWeight: '700' }}>{orderId}</span>
-              </div>
-            )}
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              <button
-                onClick={handleRetryVerification}
-                disabled={manualRetrying}
-                className="neu-btn-gold"
-                style={{
-                  width: '100%',
+              {orderId && (
+                <div style={{
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  border: '1px solid rgba(255, 255, 255, 0.06)',
+                  borderRadius: '12px',
                   padding: '0.85rem',
-                  fontSize: '0.9rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.5rem',
-                }}
-              >
-                <RefreshCw size={16} className={manualRetrying ? 'animate-spin' : ''} />
-                <span>Check Payment Status Again</span>
-              </button>
-              <button
-                onClick={handleTryAgain}
-                className="neu-btn-outline"
-                style={{ width: '100%', padding: '0.75rem', fontSize: '0.85rem' }}
-              >
-                Return to Registration Form
-              </button>
-            </div>
+                  fontSize: '0.75rem',
+                  color: 'var(--text-muted)',
+                  marginBottom: '1.5rem',
+                }}>
+                  Keep your Order ID for reference: <br />
+                  <span className="font-mono" style={{ color: 'var(--gold-bright)', fontWeight: '700' }}>{orderId}</span>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <button
+                  onClick={handleRetryVerification}
+                  disabled={manualRetrying}
+                  className="neu-btn-gold"
+                  style={{
+                    width: '100%',
+                    padding: '0.85rem',
+                    fontSize: '0.9rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.5rem',
+                    borderRadius: '12px',
+                  }}
+                >
+                  <RefreshCw size={16} className={manualRetrying ? 'animate-spin' : ''} />
+                  <span>Check Payment Status Again</span>
+                </button>
+                <button
+                  onClick={handleTryAgain}
+                  className="neu-btn-outline"
+                  style={{
+                    width: '100%',
+                    padding: '0.85rem',
+                    fontSize: '0.85rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.5rem',
+                    borderRadius: '12px',
+                  }}
+                >
+                  <ArrowLeft size={15} />
+                  <span>Return to Registration Form</span>
+                </button>
+              </div>
           </div>
         )}
 
@@ -1125,9 +1137,9 @@ export default function PaymentProcessingPage() {
           padding: '1.5rem',
         }}>
           <div style={{ maxHeight: '90vh', overflowY: 'auto', width: '100%', maxWidth: '860px' }}>
-            <DigitalTicketPass 
-              registration={fullTicket} 
-              onClose={() => setShowTicketModal(false)} 
+            <DigitalTicketPass
+              registration={fullTicket}
+              onClose={() => setShowTicketModal(false)}
               onDownload={() => downloadPassImage(fullTicket)}
             />
           </div>
