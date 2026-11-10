@@ -21,10 +21,11 @@ router = APIRouter(prefix="/charity", tags=["Charity"])
 
 
 class CreateCharityDonationRequest(BaseModel):
-    donor_name: str = Field(..., min_length=2, max_length=255)
-    donor_email: EmailStr
-    donor_phone: str = Field(..., min_length=10, max_length=15)
+    donor_name: Optional[str] = None
+    donor_email: Optional[str] = None
+    donor_phone: Optional[str] = None
     amount: Decimal = Field(..., gt=0)
+    is_anonymous: Optional[bool] = False
 
 
 class VerifyCharityPaymentRequest(BaseModel):
@@ -45,10 +46,27 @@ async def create_charity_donation(
 ):
     """
     Creates a dedicated charity donation and initiates Cashfree payment session.
+    Donors can either provide their details or donate anonymously.
     """
     donation_code = generate_donation_code()
     timestamp = int(datetime.now(timezone.utc).timestamp())
     cf_order_id = f"CF_CHARITY_{donation_code.replace('-', '_')}_{timestamp}"
+
+    # Determine anonymous or named donor
+    is_anon = bool(req.is_anonymous) or not (req.donor_name and req.donor_name.strip())
+
+    if is_anon:
+        donor_name = "Anonymous Contributor"
+        donor_email = (req.donor_email or "").strip().lower() or f"care.{donation_code.lower().replace('-', '')}@asthra.fest"
+        donor_phone = (req.donor_phone or "").strip() or "9999999999"
+    else:
+        donor_name = req.donor_name.strip()
+        donor_email = (req.donor_email or "").strip().lower() or f"care.{donation_code.lower().replace('-', '')}@asthra.fest"
+        donor_phone = (req.donor_phone or "").strip() or "9999999999"
+
+    # Ensure clean 10-digit phone for Cashfree
+    clean_digits = "".join(filter(str.isdigit, donor_phone))
+    clean_phone = clean_digits[-10:] if len(clean_digits) >= 10 else "9999999999"
 
     # Return URL directed back to /charity with order_id
     base_return = settings.CASHFREE_RETURN_URL.split("?")[0]
@@ -63,9 +81,9 @@ async def create_charity_donation(
             order_id=cf_order_id,
             order_amount=float(req.amount),
             customer_id=f"DONOR_{donation_code.replace('-', '')}",
-            customer_name=req.donor_name.strip(),
-            customer_email=req.donor_email.lower().strip(),
-            customer_phone=req.donor_phone.strip(),
+            customer_name=donor_name,
+            customer_email=donor_email,
+            customer_phone=clean_phone,
             return_url=return_url,
         )
     except Exception as exc:
@@ -77,9 +95,9 @@ async def create_charity_donation(
 
     donation = CharityDonation(
         donation_code=donation_code,
-        donor_name=req.donor_name.strip(),
-        donor_email=req.donor_email.lower().strip(),
-        donor_phone=req.donor_phone.strip(),
+        donor_name=donor_name,
+        donor_email=donor_email,
+        donor_phone=clean_phone,
         amount=req.amount,
         cf_order_id=cf_order_id,
         cf_payment_session_id=cf_response.get("payment_session_id"),

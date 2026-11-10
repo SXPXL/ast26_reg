@@ -11,7 +11,9 @@ import {
   Sparkles,
   ExternalLink,
   RotateCcw,
-  AlertCircle
+  AlertCircle,
+  EyeOff,
+  Check
 } from 'lucide-react';
 import { api } from '../services/api';
 import AsthraLogo from '../components/AsthraLogo';
@@ -300,6 +302,7 @@ export default function CharityDonationPage() {
 
   // Donor Details Modal state
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+  const [isAnonymous, setIsAnonymous] = useState(false);
   const [donorName, setDonorName] = useState('');
   const [donorEmail, setDonorEmail] = useState('');
   const [donorPhone, setDonorPhone] = useState('');
@@ -381,9 +384,13 @@ export default function CharityDonationPage() {
 
   // Validate donor form fields
   const validateForm = () => {
+    if (isAnonymous) {
+      setFormErrors({});
+      return true;
+    }
     const errors = {};
     if (!donorName.trim() || donorName.trim().length < 2) {
-      errors.name = 'Please enter your full name (minimum 2 characters).';
+      errors.name = 'Please enter your full name (or select Donate Anonymously).';
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!donorEmail.trim() || !emailRegex.test(donorEmail.trim())) {
@@ -409,10 +416,11 @@ export default function CharityDonationPage() {
 
     try {
       const payload = {
-        donor_name: donorName.trim(),
-        donor_email: donorEmail.trim().toLowerCase(),
-        donor_phone: donorPhone.replace(/[\s+-]/g, ''),
+        donor_name: isAnonymous ? 'Anonymous Contributor' : (donorName.trim() || 'Anonymous Contributor'),
+        donor_email: isAnonymous ? '' : donorEmail.trim().toLowerCase(),
+        donor_phone: isAnonymous ? '' : donorPhone.replace(/[\s+-]/g, ''),
         amount: parseFloat(amount),
+        is_anonymous: isAnonymous,
       };
 
       const result = await api.createCharityDonation(payload);
@@ -1071,132 +1079,203 @@ export default function CharityDonationPage() {
             </button>
 
             {/* Modal Header */}
-            <div style={{ marginBottom: '20px' }}>
+            <div style={{ marginBottom: '16px' }}>
               <div style={{ fontSize: '11px', color: '#D4AF37', fontWeight: 700, letterSpacing: '0.1em' }}>
                 DONOR INFORMATION
               </div>
               <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#FFFFFF', margin: '4px 0 6px 0' }}>
-                Your Contribution: ₹{Number(amount).toLocaleString('en-IN')}
+                Your Contribution: ₹{Number(amount || 0).toLocaleString('en-IN')}
               </h2>
               <p style={{ fontSize: '13px', color: '#9CA3AF', margin: 0 }}>
-                Please provide your details so we can issue your official thank-you pass.
+                You can provide your details or choose to remain completely anonymous.
               </p>
             </div>
 
-            {/* Input Form */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {/* Name */}
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#D1D5DB', marginBottom: '6px' }}>
-                  Full Name *
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Rahul Sharma"
-                  value={donorName}
-                  onChange={(e) => setDonorName(e.target.value)}
-                  style={{
-                    width: '100%',
-                    background: 'rgba(255, 255, 255, 0.04)',
-                    border: formErrors.name ? '1px solid #EF4444' : '1px solid rgba(255, 255, 255, 0.15)',
-                    borderRadius: '10px',
-                    padding: '10px 14px',
-                    color: '#FFFFFF',
-                    fontSize: '14px',
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                  }}
-                />
-                {formErrors.name && (
-                  <span style={{ fontSize: '11px', color: '#EF4444', marginTop: '4px', display: 'block' }}>
-                    {formErrors.name}
-                  </span>
-                )}
-              </div>
-
-              {/* Email */}
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#D1D5DB', marginBottom: '6px' }}>
-                  Email Address *
-                </label>
-                <input
-                  type="email"
-                  placeholder="e.g. rahul@example.com"
-                  value={donorEmail}
-                  onChange={(e) => setDonorEmail(e.target.value)}
-                  style={{
-                    width: '100%',
-                    background: 'rgba(255, 255, 255, 0.04)',
-                    border: formErrors.email ? '1px solid #EF4444' : '1px solid rgba(255, 255, 255, 0.15)',
-                    borderRadius: '10px',
-                    padding: '10px 14px',
-                    color: '#FFFFFF',
-                    fontSize: '14px',
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                  }}
-                />
-                {formErrors.email && (
-                  <span style={{ fontSize: '11px', color: '#EF4444', marginTop: '4px', display: 'block' }}>
-                    {formErrors.email}
-                  </span>
-                )}
-              </div>
-
-              {/* Phone */}
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#D1D5DB', marginBottom: '6px' }}>
-                  Phone Number *
-                </label>
-                <input
-                  type="tel"
-                  placeholder="e.g. 9876543210"
-                  value={donorPhone}
-                  onChange={(e) => setDonorPhone(e.target.value)}
-                  style={{
-                    width: '100%',
-                    background: 'rgba(255, 255, 255, 0.04)',
-                    border: formErrors.phone ? '1px solid #EF4444' : '1px solid rgba(255, 255, 255, 0.15)',
-                    borderRadius: '10px',
-                    padding: '10px 14px',
-                    color: '#FFFFFF',
-                    fontSize: '14px',
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                  }}
-                />
-                {formErrors.phone && (
-                  <span style={{ fontSize: '11px', color: '#EF4444', marginTop: '4px', display: 'block' }}>
-                    {formErrors.phone}
-                  </span>
-                )}
-              </div>
-
-              {/* Submit Button */}
-              <button
-                type="button"
-                onClick={handleInitiatePayment}
+            {/* Anonymous Toggle Option */}
+            <div
+              onClick={() => {
+                setIsAnonymous((prev) => !prev);
+                setFormErrors({});
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '12px 14px',
+                borderRadius: '12px',
+                background: isAnonymous ? 'rgba(212, 175, 55, 0.12)' : 'rgba(255, 255, 255, 0.03)',
+                border: isAnonymous ? '1px solid rgba(212, 175, 55, 0.5)' : '1px solid rgba(255, 255, 255, 0.1)',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                marginBottom: '16px',
+                userSelect: 'none',
+              }}
+            >
+              <div
                 style={{
-                  width: '100%',
-                  marginTop: '10px',
-                  padding: '13px',
-                  borderRadius: '12px',
-                  background: 'linear-gradient(135deg, #D4AF37 0%, #B89628 100%)',
-                  color: '#0B0A10',
-                  fontWeight: 700,
-                  fontSize: '15px',
-                  border: 'none',
-                  cursor: 'pointer',
+                  width: '20px',
+                  height: '20px',
+                  borderRadius: '6px',
+                  background: isAnonymous ? '#D4AF37' : 'rgba(255, 255, 255, 0.08)',
+                  border: isAnonymous ? '1px solid #D4AF37' : '1px solid rgba(255, 255, 255, 0.25)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '8px',
-                  boxShadow: '0 4px 18px rgba(212, 175, 55, 0.35)',
+                  color: '#0B0A10',
+                  flexShrink: 0,
                 }}
               >
-                <span>Donate ₹{Number(amount || 0).toLocaleString('en-IN')}</span>
-              </button>
+                {isAnonymous && <Check size={14} strokeWidth={3} />}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: isAnonymous ? '#F3E8C4' : '#E5E7EB' }}>
+                  Donate Anonymously
+                </div>
+                <div style={{ fontSize: '11px', color: '#9CA3AF' }}>
+                  Keep your identity private. No personal details will be collected or shown on the pass.
+                </div>
+              </div>
             </div>
+
+            {isAnonymous ? (
+              <div
+                style={{
+                  padding: '18px 16px',
+                  borderRadius: '12px',
+                  background: 'rgba(212, 175, 55, 0.06)',
+                  border: '1px dashed rgba(212, 175, 55, 0.25)',
+                  textAlign: 'center',
+                  marginBottom: '14px',
+                }}
+              >
+                <EyeOff size={28} color="#D4AF37" style={{ margin: '0 auto 8px auto', display: 'block' }} />
+                <div style={{ fontSize: '14px', fontWeight: 600, color: '#F3E8C4', marginBottom: '4px' }}>
+                  Contributing Anonymously
+                </div>
+                <p style={{ fontSize: '12px', color: '#9CA3AF', margin: 0, lineHeight: 1.5 }}>
+                  Your contribution will be officially recorded under <strong>Anonymous Contributor</strong>. You will still receive an official confirmation and donor pass.
+                </p>
+              </div>
+            ) : (
+              /* Input Form */
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {/* Name */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#D1D5DB', marginBottom: '6px' }}>
+                    Full Name *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Rahul Sharma"
+                    value={donorName}
+                    onChange={(e) => setDonorName(e.target.value)}
+                    style={{
+                      width: '100%',
+                      background: 'rgba(255, 255, 255, 0.04)',
+                      border: formErrors.name ? '1px solid #EF4444' : '1px solid rgba(255, 255, 255, 0.15)',
+                      borderRadius: '10px',
+                      padding: '10px 14px',
+                      color: '#FFFFFF',
+                      fontSize: '14px',
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                  {formErrors.name && (
+                    <span style={{ fontSize: '11px', color: '#EF4444', marginTop: '4px', display: 'block' }}>
+                      {formErrors.name}
+                    </span>
+                  )}
+                </div>
+
+                {/* Email */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#D1D5DB', marginBottom: '6px' }}>
+                    Email Address *
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="e.g. rahul@example.com"
+                    value={donorEmail}
+                    onChange={(e) => setDonorEmail(e.target.value)}
+                    style={{
+                      width: '100%',
+                      background: 'rgba(255, 255, 255, 0.04)',
+                      border: formErrors.email ? '1px solid #EF4444' : '1px solid rgba(255, 255, 255, 0.15)',
+                      borderRadius: '10px',
+                      padding: '10px 14px',
+                      color: '#FFFFFF',
+                      fontSize: '14px',
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                  {formErrors.email && (
+                    <span style={{ fontSize: '11px', color: '#EF4444', marginTop: '4px', display: 'block' }}>
+                      {formErrors.email}
+                    </span>
+                  )}
+                </div>
+
+                {/* Phone */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#D1D5DB', marginBottom: '6px' }}>
+                    Phone Number *
+                  </label>
+                  <input
+                    type="tel"
+                    placeholder="e.g. 9876543210"
+                    value={donorPhone}
+                    onChange={(e) => setDonorPhone(e.target.value)}
+                    style={{
+                      width: '100%',
+                      background: 'rgba(255, 255, 255, 0.04)',
+                      border: formErrors.phone ? '1px solid #EF4444' : '1px solid rgba(255, 255, 255, 0.15)',
+                      borderRadius: '10px',
+                      padding: '10px 14px',
+                      color: '#FFFFFF',
+                      fontSize: '14px',
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                  {formErrors.phone && (
+                    <span style={{ fontSize: '11px', color: '#EF4444', marginTop: '4px', display: 'block' }}>
+                      {formErrors.phone}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Submit Button */}
+            <button
+              type="button"
+              onClick={handleInitiatePayment}
+              style={{
+                width: '100%',
+                marginTop: '16px',
+                padding: '13px',
+                borderRadius: '12px',
+                background: 'linear-gradient(135deg, #D4AF37 0%, #B89628 100%)',
+                color: '#0B0A10',
+                fontWeight: 700,
+                fontSize: '15px',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                boxShadow: '0 4px 18px rgba(212, 175, 55, 0.35)',
+              }}
+            >
+              <span>
+                {isAnonymous
+                  ? `Donate ₹${Number(amount || 0).toLocaleString('en-IN')} Anonymously`
+                  : `Donate ₹${Number(amount || 0).toLocaleString('en-IN')}`}
+              </span>
+            </button>
           </div>
         </div>
       )}
