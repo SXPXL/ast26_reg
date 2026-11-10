@@ -525,7 +525,7 @@ export default function EventModal({ event, onClose, onRegistered }) {
                 className="neu-btn-gold"
                 style={{ padding: '0.85rem 1.85rem', fontSize: '0.88rem' }}
               >
-                <span>I Have Read the Rules & Proceed to Register</span>
+                <span>Proceed</span>
                 <ChevronRight size={16} />
               </button>
             </div>
