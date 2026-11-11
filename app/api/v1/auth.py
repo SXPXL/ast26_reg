@@ -1,6 +1,6 @@
 from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -60,19 +60,34 @@ async def login(
     login_data: UserLogin,
     db: AsyncSession = Depends(get_db),
 ):
-    """Login and receive a JWT Bearer token via username or email."""
-    identifier = login_data.username.lower().strip()
+    """Login and receive a JWT Bearer token via username, email, full name, or phone."""
+    identifier = (login_data.username or "").strip()
+    identifier_lower = identifier.lower()
+
+    # Extract clean digits for phone comparison
+    clean_digits = "".join(filter(str.isdigit, identifier))
+    phone_query = clean_digits[-10:] if len(clean_digits) >= 10 else None
+
+    conditions = [
+        func.lower(User.username) == identifier_lower,
+        func.lower(User.email) == identifier_lower,
+        func.lower(User.full_name) == identifier_lower,
+    ]
+    if phone_query:
+        conditions.append(User.phone.like(f"%{phone_query}%"))
+
     result = await db.execute(
-        select(User).where(
-            or_(
-                User.username == identifier,
-                User.email == identifier,
-            )
-        )
+        select(User).where(or_(*conditions))
     )
     user = result.scalars().first()
 
-    if not user or not verify_password(login_data.password, user.hashed_password):
+    raw_pwd = login_data.password or ""
+    clean_pwd = raw_pwd.strip()
+    is_valid_pwd = False
+    if user and user.hashed_password:
+        is_valid_pwd = verify_password(raw_pwd, user.hashed_password) or verify_password(clean_pwd, user.hashed_password)
+
+    if not user or not is_valid_pwd:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password.",

@@ -490,16 +490,10 @@ async def list_registrations(
         selectinload(Registration.marked_by_volunteer),
     )
 
-    # Scoping for volunteer role
+    # Scoping for volunteer role:
+    # Volunteers have universal access to confirmed registrations across all events.
     if current_user.role == UserRole.VOLUNTEER.value:
-        assigned_events_res = await db.execute(
-            select(EventVolunteer.event_id).where(EventVolunteer.user_id == current_user.id)
-        )
-        allowed_event_ids = assigned_events_res.scalars().all()
-        if not allowed_event_ids:
-            return []
-        query = query.where(Registration.event_id.in_(allowed_event_ids))
-        # Volunteers MUST NEVER see unpaid / pending registrations
+        # Volunteers ONLY see confirmed paid registrations
         query = query.where(Registration.payment_status == PaymentStatus.SUCCESS.value)
     else:
         # Admin scoping:
@@ -568,17 +562,6 @@ async def get_registration(
     if not reg:
         raise HTTPException(status_code=404, detail="Registration not found.")
 
-    # Authorization scope check for volunteers
-    if current_user.role == UserRole.VOLUNTEER.value:
-        assigned = await db.execute(
-            select(EventVolunteer).where(
-                EventVolunteer.event_id == reg.event_id,
-                EventVolunteer.user_id == current_user.id,
-            )
-        )
-        if not assigned.scalars().first():
-            raise HTTPException(status_code=403, detail="Not authorized for this event.")
-
     res = RegistrationDetailResponse.model_validate(reg)
     res.event_title = reg.event.title if reg.event else None
     res.marked_by_name = reg.marked_by_volunteer.full_name if reg.marked_by_volunteer else None
@@ -610,17 +593,6 @@ async def update_attendance(
 
     if not reg:
         raise HTTPException(status_code=404, detail="Registration not found.")
-
-    # Check volunteer assignment
-    if current_user.role == UserRole.VOLUNTEER.value:
-        assigned = await db.execute(
-            select(EventVolunteer).where(
-                EventVolunteer.event_id == reg.event_id,
-                EventVolunteer.user_id == current_user.id,
-            )
-        )
-        if not assigned.scalars().first():
-            raise HTTPException(status_code=403, detail="Not authorized to mark attendance for this event.")
 
     # Prevent marking attendance if registration has not been paid
     if update_in.attendance_status == AttendanceStatus.PRESENT and reg.payment_status != PaymentStatus.SUCCESS.value:

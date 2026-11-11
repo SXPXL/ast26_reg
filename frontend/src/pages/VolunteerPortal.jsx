@@ -65,6 +65,7 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
   // Login form state
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState(null);
 
@@ -157,6 +158,7 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
   // Create Volunteer Form state
   const [newVolForm, setNewVolForm] = useState({
     full_name: '',
+    username: '',
     email: '',
     phone: '',
     password: '',
@@ -320,10 +322,10 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
     try {
       setLoginLoading(true);
       setLoginError(null);
-      await login(username, password);
+      await login(username.trim(), password);
       toast.success('Signed in successfully!');
     } catch (err) {
-      setLoginError(err.message || 'Login failed. Check username and password.');
+      setLoginError(err.message || 'Login failed. Check your username/email and password.');
       toast.error('Invalid credentials');
     } finally {
       setLoginLoading(false);
@@ -732,7 +734,7 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
         subtext: 'Provisioning secure portal credentials...',
       });
       await api.createVolunteer(newVolForm);
-      setNewVolForm({ full_name: '', email: '', phone: '', password: '' });
+      setNewVolForm({ full_name: '', username: '', email: '', phone: '', password: '' });
       toast.success('Volunteer account created successfully!');
       loadAdminData();
     } catch (err) {
@@ -1072,10 +1074,12 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
 
             <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div style={{ textAlign: 'left' }}>
-                <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.3rem', display: 'block' }}>Username</label>
+                <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.3rem', display: 'block' }}>
+                  Username, Email or Phone
+                </label>
                 <input
                   type="text"
-                  placeholder="Username"
+                  placeholder="Enter username, email or 10-digit phone"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className="neu-input"
@@ -1085,14 +1089,37 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
 
               <div style={{ textAlign: 'left' }}>
                 <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.3rem', display: 'block' }}>Password</label>
-                <input
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="neu-input"
-                  required
-                />
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={showLoginPassword ? 'text' : 'password'}
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="neu-input"
+                    style={{ width: '100%', paddingRight: '2.5rem', boxSizing: 'border-box' }}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowLoginPassword(!showLoginPassword)}
+                    style={{
+                      position: 'absolute',
+                      right: '10px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--text-muted)',
+                      cursor: 'pointer',
+                      padding: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                    tabIndex={-1}
+                  >
+                    {showLoginPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
               </div>
 
               <button
@@ -1103,6 +1130,10 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
               >
                 {loginLoading ? 'Signing In...' : 'Sign In'}
               </button>
+
+              <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.72rem', color: 'var(--text-secondary)', textAlign: 'center' }}>
+                Volunteers can sign in using their Username, Email or Phone.
+              </p>
             </form>
           </div>
         </div>
@@ -1224,10 +1255,10 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
             >
               <AlertCircle size={32} color="#D4AF37" style={{ marginBottom: '0.75rem' }} />
               <div style={{ fontSize: '1.1rem', fontWeight: '700', color: 'var(--text-white)' }}>
-                No Events Assigned Yet
+                No Active Events Available
               </div>
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: '0.25rem' }}>
-                Please ask the administrator to assign your volunteer account to an event.
+                There are currently no active events published in the fest portal.
               </p>
             </div>
           ) : (
@@ -2920,17 +2951,6 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
 
                   <div style={{ display: 'flex', gap: '0.5rem', borderTop: isDeactivated ? '1px dashed rgba(255,255,255,0.08)' : '1px solid rgba(255,255,255,0.06)', paddingTop: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
                     <button
-                      onClick={() => handleOpenAssignModal(ev)}
-                      className="neu-btn"
-                      style={{
-                        fontSize: '0.75rem',
-                        padding: '0.45rem 0.85rem',
-                        opacity: isDeactivated ? 0.5 : 1,
-                      }}
-                    >
-                      Assign Volunteers
-                    </button>
-                    <button
                       onClick={() => handleOpenEditEvent(ev)}
                       className="neu-btn"
                       style={{
@@ -3975,9 +3995,12 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '2rem' }}>
           {/* Create Volunteer */}
           <div style={{ background: 'var(--bg-card)', borderRadius: '20px', border: '1px solid rgba(212, 175, 55, 0.2)', padding: '2rem' }}>
-            <h2 className="font-display gold-text-glow" style={{ fontSize: '1.4rem', fontWeight: '800', marginBottom: '1rem' }}>
+            <h2 className="font-display gold-text-glow" style={{ fontSize: '1.4rem', fontWeight: '800', marginBottom: '0.4rem' }}>
               Create Volunteer Account
             </h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', marginBottom: '1.25rem', lineHeight: 1.4 }}>
+              Volunteers have universal authority to mark attendance and manually register participants for all events. No event assignment needed.
+            </p>
 
             <form onSubmit={handleCreateVolunteer} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
@@ -3989,6 +4012,19 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
                   onChange={(e) => setNewVolForm({ ...newVolForm, full_name: e.target.value })}
                   className="neu-input"
                   required
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.3rem', display: 'block' }}>
+                  Username <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>(Optional - auto-generated from email if blank)</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. rahul12"
+                  value={newVolForm.username}
+                  onChange={(e) => setNewVolForm({ ...newVolForm, username: e.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, '') })}
+                  className="neu-input"
                 />
               </div>
 
@@ -4056,20 +4092,32 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
                       border: '1px solid rgba(255, 255, 255, 0.05)',
                     }}
                   >
-                    <div style={{ fontWeight: '700', fontSize: '0.95rem', color: 'var(--text-white)' }}>
-                      {v.full_name}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <div style={{ fontWeight: '700', fontSize: '0.95rem', color: 'var(--text-white)' }}>
+                        {v.full_name}
+                      </div>
+                      <span style={{ fontSize: '0.72rem', background: 'rgba(212, 175, 55, 0.15)', color: 'var(--gold-bright)', padding: '2px 8px', borderRadius: '6px', fontWeight: 600 }}>
+                        @{v.username || (v.email ? v.email.split('@')[0] : 'volunteer')}
+                      </span>
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
                       {v.email} {v.phone && `• ${v.phone}`}
                     </div>
 
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
-                      Assigned:{' '}
-                      {v.assigned_events && v.assigned_events.length > 0 ? (
-                        v.assigned_events.join(', ')
-                      ) : (
-                        <span style={{ fontStyle: 'italic' }}>None yet</span>
-                      )}
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.4rem', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.35rem' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Login:</span>
+                      <code style={{ color: 'var(--gold-bright)', background: 'rgba(0,0,0,0.3)', padding: '1px 6px', borderRadius: '4px' }}>
+                        @{v.username || (v.email ? v.email.split('@')[0] : 'volunteer')}
+                      </code>
+                      <span style={{ color: 'var(--text-muted)' }}>or</span>
+                      <code style={{ color: '#E5E7EB', background: 'rgba(0,0,0,0.3)', padding: '1px 6px', borderRadius: '4px' }}>
+                        {v.email}
+                      </code>
+                    </div>
+
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Scope:</span>
+                      <span style={{ color: 'var(--gold-bright)', fontWeight: 600 }}>All Events (Universal Check-in & Spot Reg)</span>
                     </div>
                   </div>
                 ))}

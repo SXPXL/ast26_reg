@@ -51,7 +51,7 @@ export default function VolunteerPage() {
     try {
       setLoginLoading(true);
       setLoginError(null);
-      await login(email, password);
+      await login(email.trim(), password);
     } catch (err) {
       setLoginError(err.message || 'Login failed. Check credentials.');
     } finally {
@@ -162,13 +162,15 @@ export default function VolunteerPage() {
 
           <form onSubmit={handleVolunteerLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div style={{ textAlign: 'left' }}>
-              <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.3rem', display: 'block' }}>Volunteer Email</label>
+              <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.3rem', display: 'block' }}>
+                Volunteer Username, Email or Phone
+              </label>
               <input
-                type="email"
+                type="text"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="neu-input"
-                placeholder="volunteer@fest.com"
+                placeholder="Username, email or phone"
                 required
               />
             </div>
@@ -236,13 +238,13 @@ export default function VolunteerPage() {
         </button>
       </div>
 
-      {/* Assigned Events Switcher */}
+      {/* Events Switcher */}
       {assignedEvents.length === 0 ? (
         <div className="neu-card" style={{ padding: '3rem', textAlign: 'center' }}>
           <AlertCircle size={36} color="#D4AF37" style={{ marginBottom: '1rem' }} />
-          <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>No Events Assigned Yet</h3>
+          <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>No Active Events Available</h3>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-            Ask the Main Admin to assign you to events from the Admin Panel.
+            There are currently no active events published in the system.
           </p>
         </div>
       ) : (

@@ -454,22 +454,11 @@ async def export_registrations_xlsx(
         )
     )
 
-    # Scoping for volunteer role
+    # Scoping for volunteer role:
+    # Volunteers hold universal permissions for confirmed registrations across all events.
     if current_user.role == UserRole.VOLUNTEER.value:
-        assigned_events_res = await db.execute(
-            select(EventVolunteer.event_id).where(EventVolunteer.user_id == current_user.id)
-        )
-        allowed_event_ids = assigned_events_res.scalars().all()
-        if not allowed_event_ids:
-            raise HTTPException(status_code=403, detail="No events assigned to this volunteer.")
-
         if event_id and event_id != "ALL":
-            if event_id not in allowed_event_ids:
-                raise HTTPException(status_code=403, detail="Not authorized to export this event.")
             query = query.where(Registration.event_id == event_id)
-        else:
-            query = query.where(Registration.event_id.in_(allowed_event_ids))
-
         # Volunteers only export confirmed registrations
         query = query.where(Registration.payment_status == PaymentStatus.SUCCESS.value)
     else:
