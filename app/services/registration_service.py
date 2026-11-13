@@ -8,21 +8,24 @@ from app.models.event import Event, EventType
 from app.models.registration import PaymentStatus, Registration
 
 
-def generate_unique_code(prefix: str = "ATHRA-2026") -> str:
+def generate_unique_code(prefix: str = "") -> str:
     """Generate a clean, uppercase alphanumeric registration code."""
     random_str = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
-    return f"{prefix}-{random_str}"
+    if prefix:
+        return f"{prefix}-{random_str}"
+    return random_str
 
 
-async def get_unique_registration_code(db: AsyncSession, prefix: str = "ATHRA-2026") -> str:
+async def get_unique_registration_code(db: AsyncSession, prefix: str = "") -> str:
     """Ensure generated registration code is globally unique."""
     for _ in range(10):
         code = generate_unique_code(prefix)
         result = await db.execute(select(Registration).where(Registration.registration_code == code))
         if not result.scalars().first():
             return code
-    # Fallback to UUID prefix if collisions happen
-    return f"{prefix}-{uuid.uuid4().hex[:6].upper()}"
+    # Fallback to UUID hex if collisions happen
+    fallback = uuid.uuid4().hex[:6].upper()
+    return f"{prefix}-{fallback}" if prefix else fallback
 
 
 async def assign_team_number_if_needed(db: AsyncSession, registration: Registration) -> None:

@@ -53,7 +53,7 @@ def main():
         'payment_mode': 'ONLINE'
     })
     print(f"3. Online registration created: {reg_online['registration_code']} | Status: {reg_online['payment_status']}")
-    assert reg_online['registration_code'].startswith('ATHRA-2026-')
+    assert len(reg_online['registration_code']) == 6
 
     # 4. Test Volunteer Manual Offline Registration (instantly marked SUCCESS)
     reg_offline = req('/registrations', method='POST', data={

@@ -204,7 +204,7 @@ const downloadPassImage = (ticket) => {
     ctx.fillStyle = '#FFFFFF';
     ctx.font = '900 17px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(ticket.registration_code || 'ATHRA-2026', tx + 467, ty + 117);
+    ctx.fillText(ticket.registration_code || '', tx + 467, ty + 117);
 
     // Dotted line before bottom card
     ctx.strokeStyle = 'rgba(212, 175, 55, 0.35)';

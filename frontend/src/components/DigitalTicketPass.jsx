@@ -9,7 +9,7 @@ export default function DigitalTicketPass({ registration, onClose, onDownload })
     window.print();
   };
 
-  const regCode = registration.registration_code || registration.code || 'ATHRA-2026';
+  const regCode = registration.registration_code || registration.code || '';
   const eventTitle = registration.event_title || registration.event?.title || 'Fest Event';
   const participantName = registration.participant_name || registration.user_name || registration.name || 'Participant';
   const teamName = registration.team_name || registration.team;
