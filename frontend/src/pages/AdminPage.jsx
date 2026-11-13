@@ -113,6 +113,22 @@ export default function AdminPage({ onBackToHome }) {
     }
   };
 
+  // Date formatting helpers for datetime-local inputs (preserves local timezone)
+  const formatForDateTimeLocal = (dateVal) => {
+    if (!dateVal) return '';
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return '';
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  const parseDateTimeLocalToISO = (val) => {
+    if (!val) return '';
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return '';
+    return d.toISOString();
+  };
+
   // Event Handlers
   const handleOpenCreateEvent = () => {
     setEditingEvent(null);
@@ -125,8 +141,8 @@ export default function AdminPage({ onBackToHome }) {
       max_team_size: 1,
       registration_fee: 0,
       max_capacity: 100,
-      registration_deadline: new Date(Date.now() + 15 * 86400000).toISOString().slice(0, 16),
-      event_date: new Date(Date.now() + 20 * 86400000).toISOString().slice(0, 16),
+      registration_deadline: formatForDateTimeLocal(new Date(Date.now() + 15 * 86400000)),
+      event_date: formatForDateTimeLocal(new Date(Date.now() + 20 * 86400000)),
       venue: '',
       rules: '',
       is_active: true,
@@ -145,8 +161,8 @@ export default function AdminPage({ onBackToHome }) {
       max_team_size: ev.max_team_size,
       registration_fee: ev.registration_fee,
       max_capacity: ev.max_capacity || 100,
-      registration_deadline: new Date(ev.registration_deadline).toISOString().slice(0, 16),
-      event_date: new Date(ev.event_date).toISOString().slice(0, 16),
+      registration_deadline: formatForDateTimeLocal(ev.registration_deadline),
+      event_date: formatForDateTimeLocal(ev.event_date),
       venue: ev.venue,
       rules: ev.rules || '',
       is_active: ev.is_active,
@@ -163,8 +179,8 @@ export default function AdminPage({ onBackToHome }) {
         min_team_size: eventForm.event_type === 'INDIVIDUAL' ? 1 : parseInt(eventForm.min_team_size),
         max_team_size: eventForm.event_type === 'INDIVIDUAL' ? 1 : parseInt(eventForm.max_team_size),
         max_capacity: parseInt(eventForm.max_capacity) || null,
-        registration_deadline: new Date(eventForm.registration_deadline).toISOString(),
-        event_date: new Date(eventForm.event_date).toISOString(),
+        registration_deadline: parseDateTimeLocalToISO(eventForm.registration_deadline),
+        event_date: parseDateTimeLocalToISO(eventForm.event_date),
       };
 
       if (editingEvent) {
