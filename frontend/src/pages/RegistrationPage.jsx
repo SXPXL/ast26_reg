@@ -34,6 +34,7 @@ export default function RegistrationPage({ initialMode = 'events' }) {
   const [registeringEvent, setRegisteringEvent] = useState(null);
   const [registrationSuccess, setRegistrationSuccess] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [regErrorModal, setRegErrorModal] = useState(null);
 
   // Standalone ticket search
   const [ticketSearchCode, setTicketSearchCode] = useState('');
@@ -179,6 +180,7 @@ export default function RegistrationPage({ initialMode = 'events' }) {
     } catch (err) {
       console.error(err);
       setError(err.message || 'Registration failed.');
+      setRegErrorModal({ title: 'Registration Failed', message: err.message || 'Registration failed. Please review your inputs.' });
     } finally {
       setSubmitting(false);
     }
@@ -845,6 +847,101 @@ export default function RegistrationPage({ initialMode = 'events' }) {
                 </form>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Registration Error Modal */}
+      {regErrorModal && (
+        <div
+          className="responsive-modal-overlay"
+          onClick={() => setRegErrorModal(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1400,
+            background: 'rgba(3, 3, 5, 0.85)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1.25rem',
+          }}
+        >
+          <div
+            className="neu-card"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'linear-gradient(145deg, #181622 0%, #0d0c14 100%)',
+              borderRadius: '24px',
+              border: '1px solid rgba(239, 68, 68, 0.4)',
+              boxShadow: '0 25px 60px rgba(0, 0, 0, 0.95), 0 0 40px rgba(239, 68, 68, 0.2)',
+              maxWidth: '450px',
+              width: '100%',
+              padding: '2.2rem 2rem',
+              textAlign: 'center',
+              position: 'relative',
+            }}
+          >
+            <div
+              style={{
+                width: '60px',
+                height: '60px',
+                borderRadius: '50%',
+                background: 'rgba(239, 68, 68, 0.14)',
+                border: '1px solid rgba(239, 68, 68, 0.45)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 1.25rem',
+                color: '#F87171',
+                boxShadow: '0 0 25px rgba(239, 68, 68, 0.28)',
+              }}
+            >
+              <AlertCircle size={32} />
+            </div>
+
+            <h3
+              className="font-display"
+              style={{
+                fontSize: '1.3rem',
+                fontWeight: '800',
+                color: '#FFFFFF',
+                marginBottom: '0.65rem',
+                letterSpacing: '0.02em',
+              }}
+            >
+              {regErrorModal.title || 'Attention Required'}
+            </h3>
+
+            <p
+              style={{
+                fontSize: '0.94rem',
+                color: 'var(--text-secondary, #D1D5DB)',
+                lineHeight: 1.6,
+                marginBottom: '1.8rem',
+                wordBreak: 'break-word',
+              }}
+            >
+              {regErrorModal.message}
+            </p>
+
+            <button
+              type="button"
+              onClick={() => setRegErrorModal(null)}
+              className="neu-btn-gold"
+              style={{
+                width: '100%',
+                padding: '0.85rem 1.25rem',
+                borderRadius: '14px',
+                fontWeight: '700',
+                fontSize: '0.95rem',
+                cursor: 'pointer',
+              }}
+            >
+              Review & Fix Details
+            </button>
           </div>
         </div>
       )}

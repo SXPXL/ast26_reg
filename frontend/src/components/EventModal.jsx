@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { api } from '../services/api';
 import DigitalTicketPass from './DigitalTicketPass';
 import LoadingOverlay from './LoadingOverlay';
@@ -138,7 +138,19 @@ export default function EventModal({ event, onClose, onRegistered }) {
   const [ticketData, setTicketData] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [errorModal, setErrorModal] = useState(null);
   const [hasAgreedRules, setHasAgreedRules] = useState(false);
+  const modalContentRef = useRef(null);
+
+  const triggerError = (msg, title = 'Attention Required') => {
+    setError(msg);
+    setErrorModal({ title, message: msg });
+  };
+
+  const handleCloseErrorModal = () => {
+    setErrorModal(null);
+    modalContentRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   // Form State with separate department and semester (course removed)
   const [formData, setFormData] = useState(() => {
@@ -205,22 +217,23 @@ export default function EventModal({ event, onClose, onRegistered }) {
   const handleProceedToConfirm = (e) => {
     e.preventDefault();
     setError(null);
+    setErrorModal(null);
 
     if (hasRules && !hasAgreedRules) {
-      setError('Please check "I have read and agree to the event rules" to proceed to payment.');
+      triggerError('Please check "I have read and agree to the event rules" to proceed to payment.', 'Event Rules Required');
       return;
     }
 
     const phoneClean = formData.primary_phone.replace(/\D/g, '');
     if (phoneClean.length < 10) {
-      setError('Please enter a valid 10-digit mobile number.');
+      triggerError('Please enter a valid 10-digit mobile number.', 'Invalid Mobile Number');
       return;
     }
 
     if (isTeam) {
       const totalMembers = 1 + formData.team_members.length;
       if (totalMembers < (event.min_team_size || 1)) {
-        setError(`This team event requires at least ${event.min_team_size} members.`);
+        triggerError(`This team event requires at least ${event.min_team_size} members.`, 'Team Size Requirement');
         return;
       }
 
@@ -231,15 +244,15 @@ export default function EventModal({ event, onClose, onRegistered }) {
         const tmPhoneClean = tm.phone.replace(/\D/g, '');
         const tmEmailClean = tm.email.trim().toLowerCase();
         if (!tm.full_name.trim() || !tm.email.trim() || tmPhoneClean.length < 10) {
-          setError(`Please enter a valid 10-digit mobile number for Teammate #${i + 1}.`);
+          triggerError(`Please enter a valid 10-digit mobile number for Teammate #${i + 1}.`, 'Teammate Details Incomplete');
           return;
         }
         if (tmEmailClean === primaryEmailClean) {
-          setError(`Primary registrant email (${primaryEmailClean}) cannot also be added as a teammate.`);
+          triggerError(`Primary registrant email (${primaryEmailClean}) cannot also be added as a teammate.`, 'Duplicate Email Address');
           return;
         }
         if (seenTmEmails.has(tmEmailClean)) {
-          setError(`Duplicate teammate email found: ${tmEmailClean}. Each participant must have a unique email.`);
+          triggerError(`Duplicate teammate email found: ${tmEmailClean}. Each participant must have a unique email.`, 'Duplicate Teammate Email');
           return;
         }
         seenTmEmails.add(tmEmailClean);
@@ -278,29 +291,30 @@ export default function EventModal({ event, onClose, onRegistered }) {
   const handleFinalSubmit = async () => {
     try {
       if (hasRules && !hasAgreedRules) {
-        setError('Please agree to the event rules before proceeding to payment.');
+        triggerError('Please agree to the event rules before proceeding to payment.', 'Event Rules Required');
         setStep('form');
         return;
       }
 
       setSubmitting(true);
       setError(null);
+      setErrorModal(null);
 
       const formattedTeammates = isTeam
         ? formData.team_members.map((m) => {
-            const college = m.same_college ? formData.college_name : (m.college_name || formData.college_name);
-            const dept = m.same_dept ? formData.department : (m.department || formData.department);
-            const sem = m.same_sem ? formData.semester : (m.semester || formData.semester);
+          const college = m.same_college ? formData.college_name : (m.college_name || formData.college_name);
+          const dept = m.same_dept ? formData.department : (m.department || formData.department);
+          const sem = m.same_sem ? formData.semester : (m.semester || formData.semester);
 
-            return {
-              full_name: m.full_name.trim(),
-              email: m.email.trim(),
-              phone: m.phone.trim(),
-              college_name: college.trim(),
-              department: dept.trim(),
-              course_and_semester: sem.trim(),
-            };
-          })
+          return {
+            full_name: m.full_name.trim(),
+            email: m.email.trim(),
+            phone: m.phone.trim(),
+            college_name: college.trim(),
+            department: dept.trim(),
+            course_and_semester: sem.trim(),
+          };
+        })
         : [];
 
       const primarySem = formData.semester.trim();
@@ -362,7 +376,7 @@ export default function EventModal({ event, onClose, onRegistered }) {
       if (onRegistered) onRegistered();
     } catch (err) {
       console.error(err);
-      setError(err.message || 'Registration failed. Please check inputs.');
+      triggerError(err.message || 'Registration failed. Please check inputs.', 'Registration Failed');
       toastError(err.message || 'Registration failed');
     } finally {
       setSubmitting(false);
@@ -387,6 +401,7 @@ export default function EventModal({ event, onClose, onRegistered }) {
       }}
     >
       <div
+        ref={modalContentRef}
         className="responsive-modal-card"
         onClick={(e) => e.stopPropagation()}
         style={{
@@ -1103,7 +1118,7 @@ export default function EventModal({ event, onClose, onRegistered }) {
                   onClick={() => {
                     try {
                       sessionStorage.removeItem(`event_form_${event.id}`);
-                    } catch (e) {}
+                    } catch (e) { }
                     setRestoredNotice(false);
                   }}
                   style={{
@@ -1317,6 +1332,128 @@ export default function EventModal({ event, onClose, onRegistered }) {
           </div>
         )}
       </div>
+
+      {/* ======================================================== */}
+      {/* ERROR / CONFIRMATION MODAL                               */}
+      {/* ======================================================== */}
+      {errorModal && (
+        <div
+          className="responsive-modal-overlay"
+          onClick={handleCloseErrorModal}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1400,
+            background: 'rgba(3, 3, 5, 0.85)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1.25rem',
+            animation: 'fadeIn 0.2s ease-out',
+          }}
+        >
+          <div
+            className="responsive-modal-card"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'linear-gradient(145deg, #181622 0%, #0d0c14 100%)',
+              borderRadius: '24px',
+              border: '1px solid rgba(239, 68, 68, 0.4)',
+              boxShadow: '0 25px 60px rgba(0, 0, 0, 0.95), 0 0 40px rgba(239, 68, 68, 0.2)',
+              maxWidth: '450px',
+              width: '100%',
+              padding: '2.2rem 2rem',
+              textAlign: 'center',
+              position: 'relative',
+              animation: 'scaleUp 0.2s ease-out',
+            }}
+          >
+            <button
+              onClick={handleCloseErrorModal}
+              type="button"
+              aria-label="Close error notice"
+              style={{
+                position: 'absolute',
+                top: '1.15rem',
+                right: '1.15rem',
+                background: 'rgba(255, 255, 255, 0.06)',
+                border: 'none',
+                color: 'var(--text-muted, #9CA3AF)',
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+              }}
+            >
+              <X size={16} />
+            </button>
+
+            <div
+              style={{
+                width: '60px',
+                height: '60px',
+                borderRadius: '50%',
+                background: 'rgba(239, 68, 68, 0.14)',
+                border: '1px solid rgba(239, 68, 68, 0.45)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 1.25rem',
+                color: '#F87171',
+                boxShadow: '0 0 25px rgba(239, 68, 68, 0.28)',
+              }}
+            >
+              <AlertCircle size={32} />
+            </div>
+
+            <h3
+              className="font-display"
+              style={{
+                fontSize: '1.3rem',
+                fontWeight: '800',
+                color: '#FFFFFF',
+                marginBottom: '0.65rem',
+                letterSpacing: '0.02em',
+              }}
+            >
+              {errorModal.title || 'Attention Required'}
+            </h3>
+
+            <p
+              style={{
+                fontSize: '0.94rem',
+                color: 'var(--text-secondary, #D1D5DB)',
+                lineHeight: 1.6,
+                marginBottom: '1.8rem',
+                wordBreak: 'break-word',
+              }}
+            >
+              {errorModal.message}
+            </p>
+
+            <button
+              type="button"
+              onClick={handleCloseErrorModal}
+              className="neu-btn-gold"
+              style={{
+                width: '100%',
+                padding: '0.85rem 1.25rem',
+                borderRadius: '14px',
+                fontWeight: '700',
+                fontSize: '0.95rem',
+                cursor: 'pointer',
+              }}
+            >
+              Review & Fix Details
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
