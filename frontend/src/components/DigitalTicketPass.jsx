@@ -15,10 +15,6 @@ export default function DigitalTicketPass({ registration, onClose, onDownload })
   const teamName = registration.team_name || registration.team;
   const venue = registration.venue || registration.event?.venue || 'Campus Main Arena';
 
-  const rawFee = registration.amount_paid ?? registration.registration_fee ?? registration.fee ?? 0;
-  const numFee = parseFloat(rawFee);
-  const feeDisplay = !isNaN(numFee) && numFee > 0 ? `₹${numFee.toFixed(0)}` : 'FREE';
-
   return (
     <div style={{ maxWidth: '820px', width: '100%', margin: '0 auto', fontFamily: 'inherit' }}>
       {/* Action Bar (Top Right) */}
@@ -311,130 +307,127 @@ export default function DigitalTicketPass({ registration, onClose, onDownload })
                 </div>
               </div>
 
-              {/* Registration Fee */}
+              {/* Entry Pass Status */}
               <div style={{ textAlign: 'right', paddingLeft: '1.5rem', borderLeft: '1px solid rgba(0, 0, 0, 0.1)' }}>
                 <div style={{ fontSize: '0.58rem', fontWeight: '800', color: '#777', letterSpacing: '0.15em', textTransform: 'uppercase' }}>
-                  REGISTRATION FEE
+                  ENTRY PASS
                 </div>
-                <div style={{ fontSize: '1.15rem', fontWeight: '900', color: '#111018', fontFamily: 'monospace' }}>
-                  {feeDisplay}
-                </div>
-                <div style={{ fontSize: '0.65rem', fontWeight: '700', color: '#16A34A', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.2rem' }}>
-                  <CheckCircle2 size={11} /> Paid & Confirmed
+                  <div style={{ fontSize: '0.95rem', fontWeight: '900', color: '#16A34A', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.3rem', marginTop: '0.25rem' }}>
+                    <CheckCircle2 size={15} /> Confirmed
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* ══════════ PERFORATION DIVIDER (VERTICAL DOTTED LINE) ══════════ */}
-          <div
-            style={{
-              position: 'relative',
-              width: '1px',
-              borderLeft: '2px dotted rgba(212, 175, 55, 0.65)',
-              margin: '0.6rem 0',
-              zIndex: 3,
-            }}
-          >
-            {/* Top Circular Punch Hole */}
+            {/* ══════════ PERFORATION DIVIDER (VERTICAL DOTTED LINE) ══════════ */}
             <div
               style={{
-                position: 'absolute',
-                top: '-16px',
-                left: '-10px',
-                width: '20px',
-                height: '20px',
-                borderRadius: '50%',
-                background: '#0B0A10',
-                border: '1.5px solid rgba(212, 175, 55, 0.5)',
+                position: 'relative',
+                width: '1px',
+                borderLeft: '2px dotted rgba(212, 175, 55, 0.65)',
+                margin: '0.6rem 0',
+                zIndex: 3,
               }}
-            />
-            {/* Bottom Circular Punch Hole */}
-            <div
-              style={{
-                position: 'absolute',
-                bottom: '-16px',
-                left: '-10px',
-                width: '20px',
-                height: '20px',
-                borderRadius: '50%',
-                background: '#0B0A10',
-                border: '1.5px solid rgba(212, 175, 55, 0.5)',
-              }}
-            />
-          </div>
-
-          {/* ══════════ RIGHT SIDE (AFTER DOTTED LINES: LOGO & NAME IN MIDDLE) ══════════ */}
-          <div
-            style={{
-              flex: '0 0 28%',
-              maxWidth: '28%',
-              background: 'linear-gradient(135deg, rgba(20, 18, 28, 0.95) 0%, rgba(30, 24, 14, 0.98) 100%)',
-              padding: '1.6rem 1.2rem',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              textAlign: 'center',
-              position: 'relative',
-              zIndex: 2,
-            }}
-          >
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.85rem' }}>
-              <img
-                src={ASTHRA_LOGO_BASE64}
-                alt="Asthra Festival Emblem"
-                style={{
-                  width: '76px',
-                  height: '76px',
-                  objectFit: 'contain',
-                  filter: 'drop-shadow(0 0 16px rgba(212, 175, 55, 0.6))',
-                }}
-              />
-              <div>
-                <div style={{ fontSize: '0.62rem', letterSpacing: '0.24em', textTransform: 'uppercase', color: '#D4AF37', fontWeight: '800' }}>
-                  OFFICIAL PASS
-                </div>
-                <div style={{ fontSize: '1.25rem', fontWeight: '900', color: '#FFFFFF', letterSpacing: '0.06em', marginTop: '0.2rem' }}>
-                  ASTHRA 2026
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Edge Serrated / Scalloped Tear Teeth */}
-          <div
-            style={{
-              position: 'absolute',
-              right: '-6px',
-              top: 0,
-              bottom: 0,
-              width: '12px',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-between',
-              zIndex: 4,
-              pointerEvents: 'none',
-            }}
-          >
-            {[...Array(11)].map((_, i) => (
+            >
+              {/* Top Circular Punch Hole */}
               <div
-                key={i}
                 style={{
-                  width: '12px',
-                  height: '12px',
+                  position: 'absolute',
+                  top: '-16px',
+                  left: '-10px',
+                  width: '20px',
+                  height: '20px',
                   borderRadius: '50%',
                   background: '#0B0A10',
-                  boxShadow: 'inset 2px 0 3px rgba(0, 0, 0, 0.7)',
-                  margin: '3px 0',
+                  border: '1.5px solid rgba(212, 175, 55, 0.5)',
                 }}
               />
-            ))}
+              {/* Bottom Circular Punch Hole */}
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: '-16px',
+                  left: '-10px',
+                  width: '20px',
+                  height: '20px',
+                  borderRadius: '50%',
+                  background: '#0B0A10',
+                  border: '1.5px solid rgba(212, 175, 55, 0.5)',
+                }}
+              />
+            </div>
+
+            {/* ══════════ RIGHT SIDE (AFTER DOTTED LINES: LOGO & NAME IN MIDDLE) ══════════ */}
+            <div
+              style={{
+                flex: '0 0 28%',
+                maxWidth: '28%',
+                background: 'linear-gradient(135deg, rgba(20, 18, 28, 0.95) 0%, rgba(30, 24, 14, 0.98) 100%)',
+                padding: '1.6rem 1.2rem',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                textAlign: 'center',
+                position: 'relative',
+                zIndex: 2,
+              }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.85rem' }}>
+                <img
+                  src={ASTHRA_LOGO_BASE64}
+                  alt="Asthra Festival Emblem"
+                  style={{
+                    width: '76px',
+                    height: '76px',
+                    objectFit: 'contain',
+                    filter: 'drop-shadow(0 0 16px rgba(212, 175, 55, 0.6))',
+                  }}
+                />
+                <div>
+                  <div style={{ fontSize: '0.62rem', letterSpacing: '0.24em', textTransform: 'uppercase', color: '#D4AF37', fontWeight: '800' }}>
+                    OFFICIAL PASS
+                  </div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: '900', color: '#FFFFFF', letterSpacing: '0.06em', marginTop: '0.2rem' }}>
+                    ASTHRA 2026
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Edge Serrated / Scalloped Tear Teeth */}
+            <div
+              style={{
+                position: 'absolute',
+                right: '-6px',
+                top: 0,
+                bottom: 0,
+                width: '12px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                zIndex: 4,
+                pointerEvents: 'none',
+              }}
+            >
+              {[...Array(11)].map((_, i) => (
+                <div
+                  key={i}
+                  style={{
+                    width: '12px',
+                    height: '12px',
+                    borderRadius: '50%',
+                    background: '#0B0A10',
+                    boxShadow: 'inset 2px 0 3px rgba(0, 0, 0, 0.7)',
+                    margin: '3px 0',
+                  }}
+                />
+              ))}
+            </div>
           </div>
         </div>
-      </div>
 
-      <style>{`
+        <style>{`
         @media print {
           body * {
             visibility: hidden;
@@ -456,6 +449,6 @@ export default function DigitalTicketPass({ registration, onClose, onDownload })
           }
         }
       `}</style>
-    </div>
-  );
+      </div>
+      );
 }

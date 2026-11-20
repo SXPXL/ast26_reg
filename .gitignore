@@ -32,3 +32,4 @@ dist-ssr
 f_checklist
 
 scripts\test_comprehensive_system.py
+scripts/test_comprehensive_system.py

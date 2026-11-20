@@ -257,23 +257,15 @@ const downloadPassImage = (ticket) => {
     ctx.lineTo(bx + bw - 190, by + bh - 16);
     ctx.stroke();
 
-    // Registration Fee
+    // Entry Pass Status
     ctx.textAlign = 'right';
     ctx.fillStyle = '#777777';
     ctx.font = 'bold 9px sans-serif';
-    ctx.fillText('REGISTRATION FEE', bx + bw - 24, by + bh / 2 - 14);
-
-    const rawFee = ticket.amount_paid ?? ticket.registration_fee ?? ticket.fee ?? ticket.amount ?? 0;
-    const numFee = parseFloat(rawFee);
-    const feeDisplay = !isNaN(numFee) && numFee > 0 ? `₹${numFee.toFixed(0)}` : 'FREE';
-
-    ctx.fillStyle = '#0B0A10';
-    ctx.font = '900 22px monospace';
-    ctx.fillText(feeDisplay, bx + bw - 24, by + bh / 2 + 10);
+    ctx.fillText('ENTRY PASS', bx + bw - 24, by + bh / 2 - 10);
 
     ctx.fillStyle = '#16A34A';
-    ctx.font = 'bold 10px sans-serif';
-    ctx.fillText('✓ Paid & Confirmed', bx + bw - 24, by + bh / 2 + 28);
+    ctx.font = '900 15px sans-serif';
+    ctx.fillText('✓ Confirmed', bx + bw - 24, by + bh / 2 + 14);
 
     // ════════════════════ RIGHT SIDE (AFTER DOTTED LINES) ════════════════════
     // Centered Golden Archer Logo & Fest Name in the middle
@@ -1100,69 +1092,69 @@ export default function PaymentProcessingPage() {
               Verification Timeout
             </div>
 
-              <h2 className="font-display gold-text-glow" style={{ fontSize: '1.45rem', fontWeight: '800', marginBottom: '0.75rem' }}>
-                Pending Confirmation
-              </h2>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.5rem', lineHeight: '1.6' }}>
-                We waited 15s but couldn't receive a confirmation from the gateway server yet. Please wait and recheck your registration status.
-                <br /><br />
-                <strong style={{ color: '#fff' }}>Did your money get deducted?</strong>
-                <br />
-                Don't worry! You can check your registration status on the home page using your email anytime to know if your payment was successful or failed.
-              </p>
+            <h2 className="font-display gold-text-glow" style={{ fontSize: '1.45rem', fontWeight: '800', marginBottom: '0.75rem' }}>
+              Pending Confirmation
+            </h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.5rem', lineHeight: '1.6' }}>
+              We waited 15s but couldn't receive a confirmation from the gateway server yet. Please wait and recheck your registration status.
+              <br /><br />
+              <strong style={{ color: '#fff' }}>Did your money get deducted?</strong>
+              <br />
+              Don't worry! You can check your registration status on the home page using your email anytime to know if your payment was successful or failed.
+            </p>
 
-              {orderId && (
-                <div style={{
-                  background: 'rgba(255, 255, 255, 0.02)',
-                  border: '1px solid rgba(255, 255, 255, 0.06)',
-                  borderRadius: '12px',
-                  padding: '0.85rem',
-                  fontSize: '0.75rem',
-                  color: 'var(--text-muted)',
-                  marginBottom: '1.5rem',
-                }}>
-                  Keep your Order ID for reference: <br />
-                  <span className="font-mono" style={{ color: 'var(--gold-bright)', fontWeight: '700' }}>{orderId}</span>
-                </div>
-              )}
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                <button
-                  onClick={handleRetryVerification}
-                  disabled={manualRetrying}
-                  className="neu-btn-gold"
-                  style={{
-                    width: '100%',
-                    padding: '0.85rem',
-                    fontSize: '0.9rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.5rem',
-                    borderRadius: '12px',
-                  }}
-                >
-                  <RefreshCw size={16} className={manualRetrying ? 'animate-spin' : ''} />
-                  <span>Check Payment Status Again</span>
-                </button>
-                <button
-                  onClick={handleTryAgain}
-                  className="neu-btn-outline"
-                  style={{
-                    width: '100%',
-                    padding: '0.85rem',
-                    fontSize: '0.85rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.5rem',
-                    borderRadius: '12px',
-                  }}
-                >
-                  <ArrowLeft size={15} />
-                  <span>Return to Registration Form</span>
-                </button>
+            {orderId && (
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.02)',
+                border: '1px solid rgba(255, 255, 255, 0.06)',
+                borderRadius: '12px',
+                padding: '0.85rem',
+                fontSize: '0.75rem',
+                color: 'var(--text-muted)',
+                marginBottom: '1.5rem',
+              }}>
+                Keep your Order ID for reference: <br />
+                <span className="font-mono" style={{ color: 'var(--gold-bright)', fontWeight: '700' }}>{orderId}</span>
               </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <button
+                onClick={handleRetryVerification}
+                disabled={manualRetrying}
+                className="neu-btn-gold"
+                style={{
+                  width: '100%',
+                  padding: '0.85rem',
+                  fontSize: '0.9rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                  borderRadius: '12px',
+                }}
+              >
+                <RefreshCw size={16} className={manualRetrying ? 'animate-spin' : ''} />
+                <span>Check Payment Status Again</span>
+              </button>
+              <button
+                onClick={handleTryAgain}
+                className="neu-btn-outline"
+                style={{
+                  width: '100%',
+                  padding: '0.85rem',
+                  fontSize: '0.85rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                  borderRadius: '12px',
+                }}
+              >
+                <ArrowLeft size={15} />
+                <span>Return to Registration Form</span>
+              </button>
+            </div>
           </div>
         )}
 
