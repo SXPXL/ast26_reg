@@ -48,8 +48,8 @@ async def lifespan(app: FastAPI):
             # Ensure columns exist on database tables
             try:
                 await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(100);"))
-                await conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_username ON users (username);"))
                 await conn.execute(text("UPDATE users SET username = split_part(email, '@', 1) WHERE username IS NULL;"))
+                await conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_username ON users (username);"))
 
                 await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS start_time VARCHAR(50);"))
                 await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS end_time VARCHAR(50);"))
@@ -60,14 +60,14 @@ async def lifespan(app: FastAPI):
             except Exception as col_err:
                 logger.info(f"Column check notice: {col_err}")
 
-        # Ensure admin user exists with username "admin" and password "1234"
+        # Ensure admin user exists with username "admin" and secure default password
         async with AsyncSessionLocal() as db:
             from sqlalchemy import select
             admin_res = await db.execute(select(User).where(User.role == UserRole.ADMIN.value))
             admin = admin_res.scalars().first()
 
             if not admin:
-                hashed_pwd = get_password_hash("1234")
+                hashed_pwd = get_password_hash("Admin@12345")
                 admin = User(
                     email="admin@fest.com",
                     username="admin",
@@ -79,7 +79,7 @@ async def lifespan(app: FastAPI):
                 )
                 db.add(admin)
                 await db.commit()
-                logger.info("Default Admin seeded: username='admin', password='1234'")
+                logger.info("Default Admin seeded: username='admin', email='admin@fest.com'")
             else:
                 logger.info(f"Existing Admin found: username='{admin.username}'")
 
@@ -98,20 +98,25 @@ app = FastAPI(
     description="Backend API for Athra Fest Registration, Cashfree PG, Volunteer Check-in, and Admin Analytics.",
     version="1.0.0",
     lifespan=lifespan,
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
 )
 
 # Set up CORS middleware
 cors_origins = [str(origin) for origin in settings.BACKEND_CORS_ORIGINS] if settings.BACKEND_CORS_ORIGINS else []
+cors_kwargs = {
+    "allow_origins": cors_origins,
+    "allow_credentials": True,
+    "allow_methods": ["*"],
+    "allow_headers": ["*"],
+}
+if settings.CORS_ORIGIN_REGEX:
+    cors_kwargs["allow_origin_regex"] = settings.CORS_ORIGIN_REGEX
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
-    allow_origin_regex=r"^https://.*\.vercel\.app$",
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    **cors_kwargs,
 )
 
 

@@ -4,7 +4,7 @@ from decimal import Decimal
 import io
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -234,74 +234,40 @@ async def get_overview_statistics(
         for row in timeline_res.all()
     ]
 
-    # 11. Event-wise statistics breakdown
+    # 11. Event-wise statistics breakdown (Aggregated in bulk to eliminate N+1 queries)
+    agg_res = await db.execute(
+        select(
+            Registration.event_id,
+            func.count(Registration.id).filter(Registration.payment_status == PaymentStatus.SUCCESS.value),
+            func.count(Registration.id).filter(Registration.attendance_status == AttendanceStatus.PRESENT.value),
+            func.sum(case((Registration.payment_status == PaymentStatus.SUCCESS.value, Registration.total_amount), else_=0)),
+            func.sum(case((and_(Registration.payment_status == PaymentStatus.SUCCESS.value, Registration.payment_mode == "ONLINE"), Registration.total_amount), else_=0)),
+            func.sum(case((and_(Registration.payment_status == PaymentStatus.SUCCESS.value, Registration.payment_mode == "OFFLINE"), Registration.total_amount), else_=0)),
+        ).group_by(Registration.event_id)
+    )
+    agg_map = {str(row[0]): row for row in agg_res.all()}
+
+    tm_res = await db.execute(
+        select(
+            Registration.event_id,
+            func.count(TeamMember.id),
+        )
+        .join(Registration, Registration.id == TeamMember.registration_id)
+        .where(Registration.payment_status == PaymentStatus.SUCCESS.value)
+        .group_by(Registration.event_id)
+    )
+    tm_map = {str(row[0]): (row[1] or 0) for row in tm_res.all()}
+
     event_stats_list = []
     for ev in events:
-        # Total event registrations (Confirmed paid only)
-        ev_all_regs_res = await db.execute(
-            select(func.count(Registration.id)).where(
-                Registration.event_id == ev.id,
-                Registration.payment_status == PaymentStatus.SUCCESS.value,
-            )
-        )
-        ev_all_regs = ev_all_regs_res.scalar() or 0
-
-        # Confirmed registrations
-        ev_conf_res = await db.execute(
-            select(func.count(Registration.id)).where(
-                Registration.event_id == ev.id,
-                Registration.payment_status == PaymentStatus.SUCCESS.value,
-            )
-        )
-        ev_conf = ev_conf_res.scalar() or 0
-
-        # Attended count
-        ev_att_res = await db.execute(
-            select(func.count(Registration.id)).where(
-                Registration.event_id == ev.id,
-                Registration.attendance_status == AttendanceStatus.PRESENT.value,
-            )
-        )
-        ev_att = ev_att_res.scalar() or 0
-
-        # Revenue
-        ev_rev_res = await db.execute(
-            select(func.sum(Registration.total_amount)).where(
-                Registration.event_id == ev.id,
-                Registration.payment_status == PaymentStatus.SUCCESS.value,
-            )
-        )
-        ev_rev = ev_rev_res.scalar() or Decimal("0.00")
-
-        # Online vs Offline revenue for this event
-        ev_on_rev_res = await db.execute(
-            select(func.sum(Registration.total_amount)).where(
-                Registration.event_id == ev.id,
-                Registration.payment_status == PaymentStatus.SUCCESS.value,
-                Registration.payment_mode == "ONLINE",
-            )
-        )
-        ev_on_rev = ev_on_rev_res.scalar() or Decimal("0.00")
-
-        ev_off_rev_res = await db.execute(
-            select(func.sum(Registration.total_amount)).where(
-                Registration.event_id == ev.id,
-                Registration.payment_status == PaymentStatus.SUCCESS.value,
-                Registration.payment_mode == "OFFLINE",
-            )
-        )
-        ev_off_rev = ev_off_rev_res.scalar() or Decimal("0.00")
-
-        # Total individual participant count
-        ev_tm_res = await db.execute(
-            select(func.count(TeamMember.id))
-            .join(Registration, Registration.id == TeamMember.registration_id)
-            .where(
-                Registration.event_id == ev.id,
-                Registration.payment_status == PaymentStatus.SUCCESS.value,
-            )
-        )
-        ev_tm_count = ev_tm_res.scalar() or 0
+        agg = agg_map.get(str(ev.id))
+        ev_conf = agg[1] if agg else 0
+        ev_all_regs = ev_conf
+        ev_att = agg[2] if agg else 0
+        ev_rev = agg[3] if agg and agg[3] is not None else Decimal("0.00")
+        ev_on_rev = agg[4] if agg and agg[4] is not None else Decimal("0.00")
+        ev_off_rev = agg[5] if agg and agg[5] is not None else Decimal("0.00")
+        ev_tm_count = tm_map.get(str(ev.id), 0)
         ev_participants_count = ev_conf + ev_tm_count
 
         attendance_rate = (ev_att / ev_conf * 100.0) if ev_conf > 0 else 0.0

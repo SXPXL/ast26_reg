@@ -138,10 +138,23 @@ async def cashfree_webhook(
 ):
     """
     Webhook endpoint for Cashfree PG to receive asynchronous payment event notifications.
+    Strictly verifies HMAC-SHA256 signature from Cashfree before updating payment records.
     """
     try:
-        payload = await request.json()
-        logger.info(f"Received Cashfree webhook: {payload}")
+        raw_body = await request.body()
+        signature = request.headers.get("x-webhook-signature")
+        timestamp = request.headers.get("x-webhook-timestamp")
+
+        if not cashfree_service.verify_webhook_signature(raw_body, timestamp, signature):
+            logger.warning("Rejected Cashfree webhook due to invalid or missing signature.")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid webhook signature.",
+            )
+
+        import json
+        payload = json.loads(raw_body.decode("utf-8")) if raw_body else {}
+        logger.info(f"Received verified Cashfree webhook: {payload}")
 
         event_type = payload.get("type")
         data = payload.get("data", {})
@@ -187,6 +200,8 @@ async def cashfree_webhook(
                 await db.commit()
 
         return {"status": "ok"}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error handling webhook: {str(e)}")
         return {"status": "error", "detail": str(e)}

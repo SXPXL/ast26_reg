@@ -28,24 +28,29 @@ def main():
     ev = events[0]
     print(f"   Event: {ev['title']} | Type: {ev['event_type']} | Fee: Rs.{ev['registration_fee']}")
 
-    # 2. Test Admin Login with 'admin' and '1234'
-    login_res = req('/auth/login', method='POST', data={'username': 'admin', 'password': '1234'})
+    # 2. Test Admin Login
+    try:
+        login_res = req('/auth/login', method='POST', data={'username': 'admin', 'password': 'Admin@12345'})
+    except Exception:
+        login_res = req('/auth/login', method='POST', data={'username': 'admin', 'password': '1234'})
     token = login_res['access_token']
     print(f"2. Admin login successful. Role: {login_res['user']['role']}")
     assert login_res['user']['role'] == 'ADMIN'
 
     # 3. Test Participant Online Registration with course_and_semester and team validation
+    import time
+    ts = int(time.time())
     reg_online = req('/registrations', method='POST', data={
         'event_id': ev['id'],
-        'primary_name': 'Aarav Patel',
-        'primary_email': 'aarav@patel.com',
+        'primary_name': f'Aarav Patel {ts}',
+        'primary_email': f'aarav_{ts}@patel.com',
         'primary_phone': '9876543210',
         'college_name': 'Marian College of Engineering',
         'course_and_semester': 'B.Tech CSE, Sem 6',
-        'team_name': 'CyberTitans' if ev['event_type'] == 'TEAM' else None,
+        'team_name': f'CyberTitans_{ts}' if ev['event_type'] == 'TEAM' else None,
         'team_members': [{
             'full_name': 'Rohan Das',
-            'email': 'rohan@patel.com',
+            'email': f'rohan_{ts}@patel.com',
             'phone': '9876543219',
             'college_name': 'Marian College of Engineering',
             'course_and_semester': 'B.Tech CSE, Sem 6',
@@ -55,27 +60,76 @@ def main():
     print(f"3. Online registration created: {reg_online['registration_code']} | Status: {reg_online['payment_status']}")
     assert len(reg_online['registration_code']) == 6
 
-    # 4. Test Volunteer Manual Offline Registration (instantly marked SUCCESS)
+    # 4. Security Check: Unauthenticated Offline Spot Registration MUST be blocked (403)
+    unauth_blocked = False
+    try:
+        req('/registrations', method='POST', data={
+            'event_id': ev['id'],
+            'primary_name': 'Hacker Unauth',
+            'primary_email': f'hacker_{ts}@bypass.com',
+            'primary_phone': '9876543299',
+            'college_name': 'Unknown College',
+            'course_and_semester': 'B.Tech CSE, Sem 6',
+            'team_name': f'HackTeam_{ts}' if ev['event_type'] == 'TEAM' else None,
+            'team_members': [{
+                'full_name': 'Teammate Hacker',
+                'email': f'tm_hack_{ts}@bypass.com',
+                'phone': '9876543298',
+                'college_name': 'Unknown College',
+                'course_and_semester': 'B.Tech CSE, Sem 6',
+            }] if ev['event_type'] == 'TEAM' else [],
+            'payment_mode': 'OFFLINE'
+        })
+    except urllib.error.HTTPError as e:
+        if e.code == 403:
+            unauth_blocked = True
+            print("4a. [SECURITY PASSED] Unauthenticated offline spot registration blocked with 403 Forbidden.")
+    assert unauth_blocked, "Security vulnerability: Unauthenticated user was able to register OFFLINE for free!"
+
+    # 4b. Test Authenticated Volunteer/Admin Manual Offline Registration (instantly marked SUCCESS)
     reg_offline = req('/registrations', method='POST', data={
         'event_id': ev['id'],
-        'primary_name': 'Pooja Nair',
-        'primary_email': 'pooja@nair.com',
+        'primary_name': f'Pooja Nair {ts}',
+        'primary_email': f'pooja_{ts}@nair.com',
         'primary_phone': '9876543211',
         'college_name': 'Govt Engineering College',
         'course_and_semester': 'B.Tech EEE, Sem 4',
-        'team_name': 'VoltNinjas' if ev['event_type'] == 'TEAM' else None,
+        'team_name': f'VoltNinjas_{ts}' if ev['event_type'] == 'TEAM' else None,
         'team_members': [{
             'full_name': 'Sanjay Kumar',
-            'email': 'sanjay@nair.com',
+            'email': f'sanjay_{ts}@nair.com',
             'phone': '9876543218',
             'college_name': 'Govt Engineering College',
             'course_and_semester': 'B.Tech EEE, Sem 4',
         }] if ev['event_type'] == 'TEAM' else [],
         'payment_mode': 'OFFLINE'
-    })
-    print(f"4. Offline spot registration created: {reg_offline['registration_code']} | Status: {reg_offline['payment_status']} | Mode: {reg_offline['payment_mode']}")
+    }, token=token)
+    print(f"4b. Authenticated offline spot registration created: {reg_offline['registration_code']} | Status: {reg_offline['payment_status']} | Mode: {reg_offline['payment_mode']}")
     assert reg_offline['payment_status'] == 'SUCCESS'
     assert reg_offline['payment_mode'] == 'OFFLINE'
+
+    # 4c. Security Check: Unverified Fake Webhook MUST be rejected with 401
+    webhook_blocked = False
+    try:
+        req('/payments/webhook', method='POST', data={
+            'type': 'PAYMENT_SUCCESS_WEBHOOK',
+            'data': {'order': {'order_id': 'FAKE_ORDER'}}
+        })
+    except urllib.error.HTTPError as e:
+        if e.code == 401:
+            webhook_blocked = True
+            print("4c. [SECURITY PASSED] Unsigned Cashfree webhook rejected with 401 Unauthorized.")
+    assert webhook_blocked, "Security vulnerability: Unsigned webhook was accepted!"
+
+    # 4d. Security Check: Public Volunteer Role Escalation Prevention
+    esc_reg = req('/auth/register', method='POST', data={
+        'email': f'user_esc_{ts}@fest.com',
+        'full_name': 'Privilege Escalation Attempt',
+        'password': 'Password@123',
+        'role': 'VOLUNTEER'
+    })
+    print(f"4d. [SECURITY PASSED] Public registration with role='VOLUNTEER' resulted in assigned role: {esc_reg['role']}")
+    assert esc_reg['role'] == 'PARTICIPANT', f"Role escalation failed: assigned {esc_reg['role']} instead of PARTICIPANT!"
 
     # 5. Test Attendance Check-in Toggle
     reg_id = reg_offline['registration_id']

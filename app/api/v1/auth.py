@@ -27,18 +27,25 @@ async def register(
             detail="A user with this email address already exists.",
         )
 
-    # Don't allow arbitrary self-registration as ADMIN unless it's the very first user in the db
-    role_to_assign = user_in.role
-    if role_to_assign == UserRole.ADMIN:
-        count_res = await db.execute(select(User))
-        if len(count_res.scalars().all()) > 0:
-            role_to_assign = UserRole.PARTICIPANT
+    # Public self-registration is strictly restricted to PARTICIPANT role
+    # Admin and Volunteer accounts cannot be self-assigned via public registration
+    count_res = await db.execute(select(func.count(User.id)))
+    user_count = count_res.scalar() or 0
+    role_to_assign = UserRole.ADMIN if (user_count == 0 and user_in.role == UserRole.ADMIN) else UserRole.PARTICIPANT
 
     assigned_username = (
         user_in.username.lower().strip()
         if user_in.username
         else user_in.email.split("@")[0].lower()
     )
+
+    # Check username collision to prevent unhandled integrity errors
+    conflict_user = await db.execute(select(User).where(User.username == assigned_username))
+    if conflict_user.scalars().first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Username '{assigned_username}' is already taken. Please choose another username.",
+        )
 
     user = User(
         email=user_in.email.lower(),
@@ -131,12 +138,11 @@ async def change_credentials(
     """Update username and/or password for the authenticated user."""
     # Verify current password if user is changing password
     if payload.new_password:
-        if payload.current_password:
-            if not verify_password(payload.current_password, current_user.hashed_password):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Current password is incorrect.",
-                )
+        if not payload.current_password or not verify_password(payload.current_password, current_user.hashed_password):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Current password is required and was incorrect.",
+            )
         if len(payload.new_password.strip()) < 4:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

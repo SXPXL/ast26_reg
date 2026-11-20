@@ -44,7 +44,7 @@ async def seed():
             admin_res = await db.execute(select(User).where(User.email == admin_email))
             admin = admin_res.scalars().first()
 
-        hashed_admin_pwd = get_password_hash("1234")
+        hashed_admin_pwd = get_password_hash("Admin@12345")
         if not admin:
             admin = User(
                 email=admin_email,
@@ -56,11 +56,11 @@ async def seed():
                 is_active=True,
             )
             db.add(admin)
-            print("Created Admin: username='admin', password='1234'")
+            print("Created Admin: username='admin', password='Admin@12345'")
         else:
-            admin.username = "admin"
-            admin.hashed_password = hashed_admin_pwd
-            print("Updated Admin: username='admin', password='1234'")
+            if not admin.username:
+                admin.username = "admin"
+            print(f"Existing Admin found: username='{admin.username}' (password preserved).")
 
         # 2. Create Default Volunteer
         vol_email = "volunteer@fest.com"

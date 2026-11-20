@@ -53,14 +53,16 @@ async def assign_team_number_if_needed(db: AsyncSession, registration: Registrat
     if not event or event.event_type != EventType.TEAM.value:
         return
 
-    # Count confirmed (SUCCESS) team registrations for this event excluding this one
-    count_res = await db.execute(
-        select(func.count(Registration.id)).where(
+    # Find all existing team names for this event matching "Team %" to avoid collisions
+    team_names_res = await db.execute(
+        select(Registration.team_name).where(
             Registration.event_id == event.id,
-            Registration.payment_status == PaymentStatus.SUCCESS.value,
-            Registration.id != registration.id,
+            Registration.team_name.like("Team %"),
         )
     )
-    existing_team_count = count_res.scalar() or 0
-    registration.team_name = f"Team {existing_team_count + 1}"
+    existing_team_names = set(team_names_res.scalars().all())
+    n = 1
+    while f"Team {n}" in existing_team_names:
+        n += 1
+    registration.team_name = f"Team {n}"
 

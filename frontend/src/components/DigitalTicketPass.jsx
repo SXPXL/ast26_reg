@@ -11,7 +11,7 @@ export default function DigitalTicketPass({ registration, onClose, onDownload })
 
   const regCode = registration.registration_code || registration.code || '';
   const eventTitle = registration.event_title || registration.event?.title || 'Fest Event';
-  const participantName = registration.participant_name || registration.user_name || registration.name || 'Participant';
+  const participantName = registration.primary_name || registration.participant_name || registration.user_name || registration.name || 'Participant';
   const teamName = registration.team_name || registration.team;
   const venue = registration.venue || registration.event?.venue || 'Campus Main Arena';
 

@@ -96,6 +96,42 @@ async def get_current_user(
     return user
 
 
+async def get_current_user_optional(
+    auth_credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
+    token_query: Optional[str] = Query(None, alias="token"),
+    db: AsyncSession = Depends(get_db),
+) -> Optional[User]:
+    """
+    Dependency to get the current authenticated user if credentials are provided.
+    Returns None if no token is provided (or if REQ_AUTH is disabled and no token is present, returns MOCK_ADMIN_USER).
+    """
+    token = None
+    if auth_credentials:
+        token = auth_credentials.credentials
+    elif token_query:
+        token = token_query
+
+    if not token:
+        if not settings.REQ_AUTH:
+            return MOCK_ADMIN_USER
+        return None
+
+    payload = decode_access_token(token)
+    if not payload:
+        return None
+
+    user_id = payload.get("sub")
+    if not user_id:
+        return None
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalars().first()
+    if not user or not user.is_active:
+        return None
+
+    return user
+
+
 class RoleChecker:
     """Dependency that ensures the authenticated user has one of the allowed roles."""
 

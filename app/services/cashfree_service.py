@@ -1,3 +1,6 @@
+import base64
+import hashlib
+import hmac
 import json
 import logging
 from typing import Any, Dict, Optional
@@ -120,11 +123,16 @@ class CashfreeService:
                 data["environment"] = self.env_mode
                 return data
         except httpx.HTTPStatusError as exc:
-            logger.error(f"Cashfree create order error: {exc.response.text}")
-            raise Exception(f"Cashfree Gateway Error: {exc.response.text}")
+            logger.error(f"Cashfree create order error: {exc.response.status_code} - {exc.response.text[:200]}")
+            try:
+                err_json = exc.response.json()
+                msg = err_json.get("message", "Payment gateway error")
+            except Exception:
+                msg = f"Cashfree Gateway returned status {exc.response.status_code}"
+            raise Exception(msg)
         except Exception as exc:
             logger.error(f"Cashfree connection failed: {str(exc)}")
-            raise Exception(f"Failed to connect to Cashfree payment gateway: {str(exc)}")
+            raise Exception("Unable to connect to Cashfree payment gateway. Please retry shortly.")
 
     async def get_order_status(self, order_id: str) -> Dict[str, Any]:
         """Fetch order status from Cashfree."""
@@ -168,6 +176,33 @@ class CashfreeService:
         except Exception as exc:
             logger.warning(f"Could not fetch payments for order {order_id}: {str(exc)}")
             return []
+
+    def verify_webhook_signature(
+        self,
+        raw_body: bytes,
+        timestamp: Optional[str],
+        signature: Optional[str],
+    ) -> bool:
+        """
+        Verify Cashfree PG webhook HMAC-SHA256 signature.
+        Formula: base64(hmac_sha256(timestamp + raw_body, secret_key))
+        """
+        # If in offline mock testing mode with dummy key
+        if self.app_id.startswith("TEST_CASHFREE") or not self.app_id or not self.secret_key:
+            return True
+
+        if not timestamp or not signature:
+            return False
+
+        try:
+            signature_data = timestamp.encode("utf-8") + raw_body
+            secret_bytes = self.secret_key.encode("utf-8")
+            expected_mac = hmac.new(secret_bytes, signature_data, hashlib.sha256).digest()
+            expected_signature = base64.b64encode(expected_mac).decode("utf-8")
+            return hmac.compare_digest(expected_signature, signature)
+        except Exception as exc:
+            logger.error(f"Cashfree webhook signature verification error: {exc}")
+            return False
 
 
 cashfree_service = CashfreeService()

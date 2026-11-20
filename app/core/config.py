@@ -43,6 +43,7 @@ class Settings(BaseSettings):
         "http://127.0.0.1.nip.io:5173",
         "http://127.0.0.1.nip.io:3000",
     ]
+    CORS_ORIGIN_REGEX: Optional[str] = None
 
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
     @classmethod

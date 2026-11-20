@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload
 
 logger = logging.getLogger(__name__)
 
-from app.core.dependencies import get_current_user, require_admin, require_volunteer_or_admin
+from app.core.dependencies import get_current_user, get_current_user_optional, require_admin, require_volunteer_or_admin
 from app.db.session import get_db
 from app.models.event import Event, EventType, EventVolunteer
 from app.models.payment import PaymentOrder, PaymentOrderStatus
@@ -37,6 +37,7 @@ router = APIRouter(prefix="/registrations", tags=["Registrations"])
 async def create_registration(
     reg_in: RegistrationCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """
     Register a participant or team for an event.
@@ -51,6 +52,15 @@ async def create_registration(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Event not found or registration is closed.",
         )
+
+    # Security check: Offline spot registration is strictly restricted to volunteers and admins
+    is_offline = (reg_in.payment_mode or "").upper() == "OFFLINE"
+    if is_offline and event.registration_fee > Decimal("0.00"):
+        if not current_user or current_user.role not in [UserRole.ADMIN.value, UserRole.VOLUNTEER.value]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Offline spot registration is only permitted for authorized fest volunteers and administrators.",
+            )
 
     # Registration is purely controlled by admin visibility (event.is_active)
     # Check capacity
@@ -220,7 +230,6 @@ async def create_registration(
     # 4. Create Registration Record
     registration_code = await get_unique_registration_code(db)
     total_amount = event.registration_fee
-    is_offline = (reg_in.payment_mode or "").upper() == "OFFLINE"
 
     assigned_team_name = None
     if event.event_type == EventType.TEAM.value:
