@@ -352,6 +352,8 @@ async def get_registration_by_code(
 
     res = RegistrationDetailResponse.model_validate(reg)
     res.event_title = reg.event.title if reg.event else None
+    res.event_venue = reg.event.venue if reg.event else None
+    res.venue = reg.event.venue if reg.event else None
     res.marked_by_name = reg.marked_by_volunteer.full_name if reg.marked_by_volunteer else None
     return res
 
@@ -543,6 +545,8 @@ async def list_registrations(
     for reg in registrations:
         item = RegistrationSummary.model_validate(reg)
         item.event_title = reg.event.title if reg.event else None
+        item.event_venue = reg.event.venue if reg.event else None
+        item.venue = reg.event.venue if reg.event else None
         item.marked_by_name = reg.marked_by_volunteer.full_name if reg.marked_by_volunteer else None
         response.append(item)
 
@@ -573,6 +577,8 @@ async def get_registration(
 
     res = RegistrationDetailResponse.model_validate(reg)
     res.event_title = reg.event.title if reg.event else None
+    res.event_venue = reg.event.venue if reg.event else None
+    res.venue = reg.event.venue if reg.event else None
     res.marked_by_name = reg.marked_by_volunteer.full_name if reg.marked_by_volunteer else None
     return res
 
@@ -623,6 +629,8 @@ async def update_attendance(
 
     res = RegistrationDetailResponse.model_validate(reg)
     res.event_title = reg.event.title if reg.event else None
+    res.event_venue = reg.event.venue if reg.event else None
+    res.venue = reg.event.venue if reg.event else None
     res.marked_by_name = current_user.full_name
     return res
 

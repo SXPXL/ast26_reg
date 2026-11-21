@@ -116,6 +116,7 @@ async def verify_payment(
     await db.commit()
 
     event_title = registration.event.title if (registration and registration.event) else None
+    event_venue = registration.event.venue if (registration and registration.event) else None
     participant_name = registration.primary_name if registration else None
 
     return VerifyPaymentResponse(
@@ -126,6 +127,8 @@ async def verify_payment(
         payment_status=final_status,
         order_amount=payment_order.order_amount,
         event_title=event_title,
+        event_venue=event_venue,
+        venue=event_venue,
         participant_name=participant_name,
         raw_status=cf_order_status,
     )

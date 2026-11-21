@@ -246,7 +246,7 @@ const downloadPassImage = (ticket) => {
 
     ctx.fillStyle = '#111018';
     ctx.font = '900 17px sans-serif';
-    const venueStr = (ticket.venue || 'Campus Main Arena').slice(0, 30);
+    const venueStr = (ticket.venue || ticket.event_venue || ticket.event?.venue || 'Campus Main Arena').slice(0, 30);
     ctx.fillText(venueStr, bx + 78, by + bh / 2 + 10);
 
     // Vertical Divider inside bottom card
@@ -341,6 +341,7 @@ export default function PaymentProcessingPage() {
   const initialOrderId = urlParams.get('order_id') || '';
   const envMode = urlParams.get('env') === 'production' ? 'production' : 'sandbox';
   const paramEventTitle = urlParams.get('event') || '';
+  const paramVenue = urlParams.get('venue') || '';
   const paramAmount = urlParams.get('amount') || '';
 
   // Current stage: 'initiating' | 'verifying' | 'success' | 'failed' | 'timeout'
@@ -550,6 +551,7 @@ export default function PaymentProcessingPage() {
   };
 
   const displayEventTitle = verifyResult?.event_title || paramEventTitle || cachedDetails?.event_title || 'Fest Event Registration';
+  const displayVenue = verifyResult?.venue || verifyResult?.event_venue || fullTicket?.venue || fullTicket?.event_venue || paramVenue || cachedDetails?.venue || 'Campus Main Arena';
   const displayAmount = verifyResult?.order_amount || paramAmount || cachedDetails?.amount || '';
   const displayRegCode = verifyResult?.registration_code || cachedDetails?.registration_code || '';
   const displayParticipant = verifyResult?.participant_name || cachedDetails?.primary_name || '';
@@ -558,6 +560,7 @@ export default function PaymentProcessingPage() {
     registration_code: displayRegCode,
     primary_name: displayParticipant,
     event_title: displayEventTitle,
+    venue: displayVenue,
     college_name: cachedDetails?.college_name || '',
     department: cachedDetails?.department || '',
     payment_status: 'SUCCESS',

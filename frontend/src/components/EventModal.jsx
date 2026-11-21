@@ -347,6 +347,7 @@ export default function EventModal({ event, onClose, onRegistered }) {
             registration_code: result.registration_code,
             event_title: event.title,
             event_id: event.id,
+            venue: event.venue || '',
             amount: fee,
             primary_name: formData.primary_name.trim(),
             formData: formData,
@@ -361,7 +362,7 @@ export default function EventModal({ event, onClose, onRegistered }) {
         }
 
         // Navigate to dedicated payment opening & processing page with event_id
-        window.location.href = `/payment/process?order_id=${encodeURIComponent(orderId)}&session_id=${encodeURIComponent(sessionId)}&env=${encodeURIComponent(envMode)}&event=${encodeURIComponent(event.title)}&event_id=${encodeURIComponent(event.id)}&amount=${encodeURIComponent(fee)}`;
+        window.location.href = `/payment/process?order_id=${encodeURIComponent(orderId)}&session_id=${encodeURIComponent(sessionId)}&env=${encodeURIComponent(envMode)}&event=${encodeURIComponent(event.title)}&event_id=${encodeURIComponent(event.id)}&amount=${encodeURIComponent(fee)}&venue=${encodeURIComponent(event.venue || '')}`;
         return;
       }
 

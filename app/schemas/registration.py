@@ -49,6 +49,8 @@ class RegistrationSummary(BaseModel):
     registration_code: str
     event_id: str
     event_title: Optional[str] = None
+    event_venue: Optional[str] = None
+    venue: Optional[str] = None
     primary_name: str
     primary_email: str
     primary_phone: str
