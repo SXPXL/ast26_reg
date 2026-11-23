@@ -18,7 +18,7 @@ export default function PolicyModal({ isOpen, onClose, initialTab = 'about' }) {
   const [activeTab, setActiveTab] = useState(initialTab);
 
   // Fetch phone numbers and contact details from environment variables
-  const contactPhone = import.meta.env.VITE_CONTACT_PHONE_NUMBER || '+919847113128';
+  const contactPhone = import.meta.env.VITE_CONTACT_PHONE_NUMBER || '+917356336812';
   const helpPhone = import.meta.env.VITE_HELP_PHONE_NUMBER || '+919876543210';
   const helpWhatsapp = import.meta.env.VITE_HELP_WHATSAPP_NUMBER || '+919876543210';
   const emailAddress = 'asthrastc.26@gmail.com';
