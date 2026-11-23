@@ -297,7 +297,7 @@ export default function HelpModal({ isOpen, onClose }) {
                   Call Support
                 </div>
                 <div style={{ fontSize: '0.76rem', color: 'var(--gold-bright, #F5D77F)' }}>
-                  {rawPhone} • Direct Phone Call
+                  {rawPhone} • Helpline
                 </div>
               </div>
             </div>

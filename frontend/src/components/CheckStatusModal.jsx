@@ -493,7 +493,7 @@ export default function CheckStatusModal({ isOpen, onClose }) {
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                           <Building size={14} />
-                          <span>{reg.college_name || 'Marian College'}</span>
+                          <span>{reg.college_name || 'St. Thomas College'}</span>
                         </div>
                         {reg.created_at && (
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>

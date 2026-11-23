@@ -7,6 +7,7 @@ import ParticipantPage from './pages/ParticipantPage';
 import VolunteerPortal from './pages/VolunteerPortal';
 import PaymentProcessingPage from './pages/PaymentProcessingPage';
 import CharityDonationPage from './pages/CharityDonationPage';
+import Footer from './components/Footer';
 
 function MainApp() {
   // Current route: '/' for participants, '/volunteer' for volunteers/admins, or '/payment/*'
@@ -106,6 +107,9 @@ function MainApp() {
           <ParticipantPage />
         )}
       </main>
+
+      {/* Global Footer (About Us, Contact Us, Policies) */}
+      {!isVolunteerRoute && <Footer />}
     </div>
   );
 }

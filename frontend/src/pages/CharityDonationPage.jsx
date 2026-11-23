@@ -18,6 +18,7 @@ import {
 import { api } from '../services/api';
 import AsthraLogo from '../components/AsthraLogo';
 import { ASTHRA_LOGO_BASE64 } from '../assets/asthraLogoBase64';
+import Footer from '../components/Footer';
 
 // Quick Preset Contribution Amounts
 const PRESET_AMOUNTS = [100, 250, 500, 1000, 2500, 5000];
@@ -1279,6 +1280,11 @@ export default function CharityDonationPage() {
           </div>
         </div>
       )}
+
+      {/* Global Footer */}
+      <div style={{ width: '100%', marginTop: 'auto' }}>
+        <Footer />
+      </div>
     </div>
   );
 }

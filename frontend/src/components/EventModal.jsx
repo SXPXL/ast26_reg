@@ -736,7 +736,7 @@ export default function EventModal({ event, onClose, onRegistered }) {
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g. Marian College"
+                      placeholder="e.g. St. Thomas College"
                       value={formData.college_name}
                       onChange={(e) => setFormData({ ...formData, college_name: e.target.value })}
                       className="neu-input"
