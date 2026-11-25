@@ -26,7 +26,21 @@ class Settings(BaseSettings):
     def strip_db_urls(cls, v: str) -> str:
         return v.strip() if isinstance(v, str) else v
 
-    # Cashfree PG
+    # Payment Provider Selection: 'razorpay' | 'cashfree' | 'manual_upi' | 'manual'
+    PAYMENT_PROVIDER: str = "razorpay"
+    PAYMENT_MODE: Optional[str] = None  # Optional alias: if set to 'manual', overrides PAYMENT_PROVIDER
+
+    # Razorpay PG Credentials
+    RAZORPAY_KEY_ID: str = "rzp_test_placeholder"
+    RAZORPAY_KEY_SECRET: str = "placeholder_secret"
+    RAZORPAY_WEBHOOK_SECRET: str = "placeholder_webhook_secret"
+
+    # Manual UPI Fallback Details
+    MANUAL_UPI_ID: str = "asthra26@upi"
+    MANUAL_UPI_NAME: str = "Asthra 26 Mathematics Dept"
+    MANUAL_UPI_QR_IMAGE: Optional[str] = None
+
+    # Cashfree PG (Maintained for backward compatibility)
     CASHFREE_APP_ID: str = "TEST_CASHFREE_APP_ID"
     CASHFREE_SECRET_KEY: str = "TEST_CASHFREE_SECRET_KEY"
     CASHFREE_API_VERSION: str = "2023-08-01"

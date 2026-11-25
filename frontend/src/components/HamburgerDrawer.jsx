@@ -12,6 +12,7 @@ import {
   BarChart3,
   Settings,
   LogOut,
+  ShieldCheck,
 } from 'lucide-react';
 
 export default function HamburgerDrawer({ isOpen, onClose, onToggle, activeSection, onSelectSection }) {
@@ -33,6 +34,13 @@ export default function HamburgerDrawer({ isOpen, onClose, onToggle, activeSecti
       label: 'Register Participant',
       icon: UserPlus,
       desc: 'Spot register via Cash or Online QR',
+      adminOnly: false,
+    },
+    {
+      id: 'verify_payments',
+      label: 'Verify Payments',
+      icon: ShieldCheck,
+      desc: 'Confirm pay-at-desk registrations live',
       adminOnly: false,
     },
     {

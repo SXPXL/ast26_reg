@@ -24,7 +24,8 @@ from app.schemas.registration import (
     RegistrationDetailResponse,
     RegistrationSummary,
 )
-from app.services.cashfree_service import cashfree_service
+from app.services.payments import get_active_provider_name, get_payment_provider, NormalizedPaymentStatus
+from app.services.realtime import verify_payments_ws_manager
 from app.services.registration_service import (
     assign_team_number_if_needed,
     get_unique_registration_code,
@@ -154,6 +155,24 @@ async def create_registration(
             detail=f"The email '{conflict_member}' has already been registered as a team member for this event.",
         )
 
+    # D0. In manual desk mode, prevent duplicate PENDING_MANUAL registration for same email & event
+    if get_active_provider_name() == "manual":
+        existing_manual_res = await db.execute(
+            select(Registration)
+            .where(
+                Registration.event_id == event.id,
+                func.lower(Registration.primary_email).in_(all_emails),
+                Registration.payment_status == PaymentStatus.PENDING_MANUAL.value,
+            )
+            .order_by(Registration.created_at.desc())
+        )
+        existing_manual = existing_manual_res.scalars().first()
+        if existing_manual:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"You have already registered for this event (Code: {existing_manual.registration_code}). You can pay at the payment desk during the event day.",
+            )
+
     # D. Check for existing PENDING registrations with 2-minute real-time Cashfree guard
     pending_regs_res = await db.execute(
         select(Registration)
@@ -188,7 +207,7 @@ async def create_registration(
             created_time = created_time.replace(tzinfo=timezone.utc)
         age_seconds = (now_utc - created_time).total_seconds()
 
-        # Check latest status from Cashfree for the pending order
+        # Check latest status from active provider for the pending order
         order_res = await db.execute(
             select(PaymentOrder)
             .where(PaymentOrder.registration_id == p_reg.id)
@@ -196,12 +215,14 @@ async def create_registration(
         )
         p_order = order_res.scalars().first()
 
-        if p_order and p_order.cf_order_id:
+        lookup_id = p_order.provider_order_id or p_order.cf_order_id if p_order else None
+        if p_order and lookup_id:
             try:
-                cf_data = await cashfree_service.get_order_status(p_order.cf_order_id)
-                cf_status = str(cf_data.get("order_status", "")).upper()
-                if cf_status == "PAID":
+                provider = get_payment_provider(p_order.payment_provider)
+                v_res = await provider.verify_payment(lookup_id, {})
+                if v_res.status == NormalizedPaymentStatus.PAID:
                     p_order.payment_status = PaymentOrderStatus.PAID.value
+                    p_order.provider_payment_id = v_res.payment_id or p_order.provider_payment_id
                     p_reg.payment_status = PaymentStatus.SUCCESS.value
                     await assign_team_number_if_needed(db, p_reg)
                     await db.commit()
@@ -212,7 +233,7 @@ async def create_registration(
             except HTTPException:
                 raise
             except Exception as e:
-                logger.warning(f"Could not verify Cashfree status for order {p_order.cf_order_id}: {e}")
+                logger.warning(f"Could not verify status for order {lookup_id}: {e}")
 
         # If order was created within the last 2 minutes (120 seconds), protect user from double charging
         if age_seconds < 120:
@@ -281,31 +302,42 @@ async def create_registration(
         )
         db.add(tm)
 
-    # 5. Initialize Cashfree Payment Order if online and fee > 0
+    # 5. Initialize Payment Order if online and fee > 0
     payment_session_data = None
     if total_amount > Decimal("0.00") and not is_offline:
-        cf_order_id = f"CF_{registration.registration_code.replace('-', '_')}_{int(datetime.now().timestamp())}"
+        provider = get_payment_provider()
+        order_id = f"ATHRA_{registration.registration_code.replace('-', '_')}_{int(datetime.now().timestamp())}"
         try:
-            cf_response = await cashfree_service.create_order(
-                order_id=cf_order_id,
-                order_amount=float(total_amount),
+            order_result = await provider.create_order(
+                order_id=order_id,
+                amount=float(total_amount),
                 customer_id=registration.id,
                 customer_name=reg_in.primary_name,
                 customer_email=reg_in.primary_email,
                 customer_phone=reg_in.primary_phone,
+                receipt=registration.registration_code,
             )
 
             payment_order = PaymentOrder(
                 registration_id=registration.id,
-                cf_order_id=cf_order_id,
+                payment_provider=provider.provider_name,
+                provider_order_id=order_result.order_id,
+                cf_order_id=order_result.order_id,
+                cf_payment_session_id=order_result.checkout_data.get("payment_session_id"),
                 order_amount=total_amount,
-                order_currency="INR",
-                payment_status=PaymentOrderStatus.ACTIVE.value,
-                cf_payment_session_id=cf_response.get("payment_session_id"),
-                gateway_response=cf_response,
+                order_currency=order_result.currency,
+                payment_status=order_result.status.value,
+                gateway_response=order_result.raw_response,
             )
+            registration.payment_provider = provider.provider_name
+            registration.provider_order_id = order_result.order_id
+            registration.payment_status = order_result.status.value
             db.add(payment_order)
-            payment_session_data = cf_response
+            payment_session_data = {
+                "provider": provider.provider_name,
+                "order_id": order_result.order_id,
+                **order_result.checkout_data,
+            }
         except Exception as e:
             await db.rollback()
             raise HTTPException(
@@ -315,6 +347,31 @@ async def create_registration(
 
     await db.commit()
     await db.refresh(registration)
+
+    # Broadcast newly registered paid-event participants to Verify Payments WebSocket clients
+    if total_amount > Decimal("0.00"):
+        await verify_payments_ws_manager.broadcast(
+            "new_registration",
+            {
+                "id": str(registration.id),
+                "registration_code": registration.registration_code,
+                "primary_name": registration.primary_name,
+                "primary_email": registration.primary_email,
+                "primary_phone": registration.primary_phone,
+                "college_name": registration.college_name,
+                "event_id": str(registration.event_id),
+                "event_title": event.title,
+                "event_type": event.event_type,
+                "total_amount": float(registration.total_amount or 0),
+                "payment_status": registration.payment_status,
+                "payment_provider": registration.payment_provider,
+                "payment_mode": registration.payment_mode,
+                "utr": registration.utr,
+                "team_name": registration.team_name,
+                "created_at": registration.created_at.isoformat() if registration.created_at else None,
+                "paid_at": registration.paid_at.isoformat() if registration.paid_at else None,
+            },
+        )
 
     return RegistrationCreatedResponse(
         registration_code=registration.registration_code,
@@ -427,7 +484,8 @@ async def recheck_registration_payment(
         .order_by(PaymentOrder.created_at.desc())
     )
     order = order_res.scalars().first()
-    if not order or not order.cf_order_id:
+    lookup_id = (order.provider_order_id or order.cf_order_id) if order else None
+    if not order or not lookup_id:
         return {
             "registration_id": reg.id,
             "payment_status": reg.payment_status,
@@ -435,28 +493,18 @@ async def recheck_registration_payment(
             "success": False,
         }
 
-    # Query Cashfree gateway for latest status
+    # Query gateway provider for latest status
     try:
-        cf_status = await cashfree_service.get_order_status(order.cf_order_id)
-        cf_order_status = cf_status.get("order_status", "ACTIVE").upper()
+        provider = get_payment_provider(order.payment_provider)
+        v_res = await provider.verify_payment(lookup_id, {})
 
-        if cf_order_status == "PAID":
+        if v_res.status == NormalizedPaymentStatus.PAID:
             order.payment_status = PaymentOrderStatus.PAID.value
+            order.provider_payment_id = v_res.payment_id or order.provider_payment_id
+            order.paid_at = datetime.now(timezone.utc)
             reg.payment_status = PaymentStatus.SUCCESS.value
-            await assign_team_number_if_needed(db, reg)
-            await db.commit()
-            return {
-                "registration_id": reg.id,
-                "payment_status": "SUCCESS",
-                "message": "Payment verified successfully!",
-                "success": True,
-            }
-
-        # Check transactions list for this order
-        payments = await cashfree_service.get_order_payments(order.cf_order_id)
-        if payments and any(p.get("payment_status", "").upper() == "SUCCESS" for p in payments):
-            order.payment_status = PaymentOrderStatus.PAID.value
-            reg.payment_status = PaymentStatus.SUCCESS.value
+            reg.provider_payment_id = v_res.payment_id or reg.provider_payment_id
+            reg.paid_at = datetime.now(timezone.utc)
             await assign_team_number_if_needed(db, reg)
             await db.commit()
             return {
@@ -469,7 +517,7 @@ async def recheck_registration_payment(
         return {
             "registration_id": reg.id,
             "payment_status": reg.payment_status,
-            "message": f"Payment is currently {cf_order_status.lower()}.",
+            "message": v_res.message or f"Payment status: {v_res.status.value}",
             "success": False,
         }
     except Exception as e:

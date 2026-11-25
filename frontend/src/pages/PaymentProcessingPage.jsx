@@ -13,8 +13,10 @@ import {
   Ticket,
   RefreshCw,
   Download,
-  HelpCircle
+  HelpCircle,
+  QrCode
 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { api } from '../services/api';
 import DigitalTicketPass from '../components/DigitalTicketPass';
 import LoadingOverlay from '../components/LoadingOverlay';
@@ -344,20 +346,6 @@ export default function PaymentProcessingPage() {
   const paramVenue = urlParams.get('venue') || '';
   const paramAmount = urlParams.get('amount') || '';
 
-  // Current stage: 'initiating' | 'verifying' | 'success' | 'failed' | 'timeout'
-  const [stage, setStage] = useState(() => (isProcessRoute ? 'initiating' : 'verifying'));
-  const [timeLeft, setTimeLeft] = useState(15);
-  const [verifyResult, setVerifyResult] = useState(null);
-  const [errorMessage, setErrorMessage] = useState(null);
-  const [copiedCode, setCopiedCode] = useState(false);
-  const [fullTicket, setFullTicket] = useState(null);
-  const [showTicketModal, setShowTicketModal] = useState(false);
-  const [manualRetrying, setManualRetrying] = useState(false);
-  const [helpModalOpen, setHelpModalOpen] = useState(false);
-
-  const orderId = initialOrderId || (verifyResult ? verifyResult.order_id : '');
-  const isMock = sessionId.startsWith('session_mock_') || initialOrderId.startsWith('MOCK_');
-
   // Load cached registration details from sessionStorage if available
   const [cachedDetails, setCachedDetails] = useState(() => {
     if (!initialOrderId) return null;
@@ -369,24 +357,201 @@ export default function PaymentProcessingPage() {
     }
   });
 
+  // Stored payment session info (created by registration or charity order creation)
+  const sessionData = (() => {
+    if (!initialOrderId) return null;
+    try {
+      const raw = sessionStorage.getItem(`payment_session_${initialOrderId}`);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  })();
+
+  const rawProvider = urlParams.get('provider') || sessionData?.provider;
+  const provider = (rawProvider || (initialOrderId.startsWith('order_') ? 'razorpay' : (initialOrderId.startsWith('DESK_') ? 'manual' : (initialOrderId.startsWith('UPI_') ? 'manual_upi' : 'cashfree')))).toLowerCase();
+  const razorpayKeyId = urlParams.get('key_id') || sessionData?.key_id || '';
+  const upiId = urlParams.get('upi_id') || sessionData?.upi_id || 'asthra@upi';
+  const upiName = urlParams.get('upi_name') || sessionData?.upi_name || 'Asthra Fest';
+  const qrPayload = urlParams.get('qr_payload') || sessionData?.qr_payload || '';
+
+  // Current stage: 'initiating' | 'manual_upi' | 'pending_manual' | 'verifying' | 'success' | 'failed' | 'timeout'
+  const [stage, setStage] = useState(() => {
+    if (!isProcessRoute) return 'verifying';
+    if (provider === 'manual') return 'pending_manual';
+    if (provider === 'manual_upi') return 'manual_upi';
+    return 'initiating';
+  });
+
+  const [timeLeft, setTimeLeft] = useState(15);
+  const [verifyResult, setVerifyResult] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [copiedUpi, setCopiedUpi] = useState(false);
+  const [fullTicket, setFullTicket] = useState(null);
+  const [showTicketModal, setShowTicketModal] = useState(false);
+  const [manualRetrying, setManualRetrying] = useState(false);
+  const [helpModalOpen, setHelpModalOpen] = useState(false);
+
+  // Manual UPI form state
+  const [utrInput, setUtrInput] = useState('');
+  const [utrSubmitting, setUtrSubmitting] = useState(false);
+  const [utrSubmitted, setUtrSubmitted] = useState(false);
+  const [utrError, setUtrError] = useState('');
+
+  const orderId = initialOrderId || (verifyResult ? verifyResult.order_id : '');
+  const isMock = sessionId.startsWith('session_mock_') || 
+                 initialOrderId.startsWith('MOCK_') || 
+                 sessionId.startsWith('mock_') || 
+                 initialOrderId.startsWith('order_mock_') || 
+                 razorpayKeyId === 'rzp_test_placeholder' || 
+                 !razorpayKeyId;
+
+  // ─────────────────────────────────────────────────────────────
+  // Razorpay Checkout Launcher
+  // ─────────────────────────────────────────────────────────────
+  const handleLaunchRazorpay = () => {
+    if (isMock) {
+      console.log('Mock mode active - skipping Razorpay window open');
+      return;
+    }
+
+    if (!window.Razorpay) {
+      setErrorMessage('Razorpay Checkout SDK is still loading. Please check your internet connection and retry.');
+      return;
+    }
+
+    if (!razorpayKeyId || razorpayKeyId === 'rzp_test_placeholder') {
+      setErrorMessage('Invalid or missing Razorpay Key ID. Please configure RAZORPAY_KEY_ID in .env.');
+      return;
+    }
+
+    const amt = Math.round(Number(paramAmount || sessionData?.amount || cachedDetails?.amount || 0) * 100);
+    const rzpOptions = {
+      key: razorpayKeyId,
+      amount: amt,
+      currency: sessionData?.currency || 'INR',
+      name: 'Asthra 2026',
+      description: paramEventTitle || sessionData?.event_title || cachedDetails?.event_title || 'Event Registration',
+      order_id: initialOrderId || orderId,
+      prefill: {
+        name: cachedDetails?.primary_name || sessionData?.participant_name || '',
+        email: cachedDetails?.primary_email || '',
+        contact: cachedDetails?.primary_phone || '',
+      },
+      theme: {
+        color: '#D4AF37',
+      },
+      handler: async function (response) {
+        setStage('verifying');
+        setTimeLeft(15);
+        try {
+          const res = await api.verifyPayment(response.razorpay_order_id || orderId, {
+            razorpay_order_id: response.razorpay_order_id,
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_signature: response.razorpay_signature,
+          });
+          setVerifyResult(res);
+          if (res.payment_status === 'SUCCESS' || res.success) {
+            setStage('success');
+            if (res.registration_code) {
+              try {
+                const ticket = await api.getRegistrationByCode(res.registration_code);
+                setFullTicket(ticket);
+              } catch (tErr) {
+                console.log('Ticket fetch error:', tErr);
+              }
+            }
+          } else {
+            setStage('failed');
+            setErrorMessage(res.message || 'Payment signature verification failed.');
+          }
+        } catch (err) {
+          setStage('failed');
+          setErrorMessage(err.response?.data?.detail || err.message || 'Signature verification failed.');
+        }
+      },
+      modal: {
+        ondismiss: function () {
+          console.log('Razorpay modal dismissed');
+        }
+      }
+    };
+
+    try {
+      const rzp = new window.Razorpay(rzpOptions);
+      rzp.on('payment.failed', function (resp) {
+        setStage('failed');
+        setErrorMessage(resp.error?.description || 'Payment was declined or cancelled.');
+      });
+      rzp.open();
+    } catch (err) {
+      console.error('Razorpay open error:', err);
+      setErrorMessage('Could not open Razorpay checkout: ' + (err.message || 'SDK error'));
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────
+  // Manual UPI UTR Submission Handler
+  // ─────────────────────────────────────────────────────────────
+  const handleManualUpiSubmit = async (e) => {
+    if (e) e.preventDefault();
+    const cleanUtr = utrInput.trim();
+    if (!cleanUtr || cleanUtr.length < 6) {
+      setUtrError('Please enter a valid 12-digit UTR / Transaction ID (min 6 characters).');
+      return;
+    }
+    setUtrError('');
+    setUtrSubmitting(true);
+    try {
+      const targetRegCode = verifyResult?.registration_code || sessionData?.registration_code || cachedDetails?.registration_code || '';
+      await api.submitManualUpiUtr(targetRegCode, cleanUtr);
+      setUtrSubmitted(true);
+      setStage('pending_manual');
+    } catch (err) {
+      setUtrError(err.response?.data?.detail || err.message || 'Failed to submit payment reference. Please try again.');
+    } finally {
+      setUtrSubmitting(false);
+    }
+  };
+
   // ─────────────────────────────────────────────────────────────
   // 1. INITIATING STAGE (Opening payment gateway)
   // ─────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!isProcessRoute || stage !== 'initiating') return;
+    if (!isProcessRoute) return;
 
-    if (isMock) {
-      // Mock mode: provide simulation option or auto-redirect
+    if (provider === 'manual') {
+      setStage('pending_manual');
       return;
     }
 
+    if (provider === 'manual_upi') {
+      setStage('manual_upi');
+      return;
+    }
+
+    if (stage !== 'initiating') return;
+
+    if (isMock) {
+      // Mock mode: provide simulation buttons
+      return;
+    }
+
+    if (provider === 'razorpay') {
+      const timer = setTimeout(() => {
+        handleLaunchRazorpay();
+      }, 700);
+      return () => clearTimeout(timer);
+    }
+
+    // Fallback: Cashfree checkout
     if (!sessionId) {
       setErrorMessage('Missing payment session ID. Please return to the event page and try registering again.');
       setStage('failed');
       return;
     }
 
-    // Launch Cashfree SDK checkout with _self (full tab redirect to Cashfree)
     const timer = setTimeout(() => {
       if (window.Cashfree) {
         try {
@@ -405,10 +570,14 @@ export default function PaymentProcessingPage() {
     }, 1200);
 
     return () => clearTimeout(timer);
-  }, [isProcessRoute, stage, sessionId, envMode, isMock]);
+  }, [isProcessRoute, stage, sessionId, envMode, isMock, provider]);
 
   // Manual trigger for opening gateway if auto-redirect was delayed
   const handleManualOpenGateway = () => {
+    if (provider === 'razorpay') {
+      handleLaunchRazorpay();
+      return;
+    }
     if (!window.Cashfree) {
       alert('Cashfree SDK is still loading, please wait a moment.');
       return;
@@ -482,6 +651,10 @@ export default function PaymentProcessingPage() {
               console.log('Ticket fetch error:', tErr);
             }
           }
+        } else if (res.payment_status === 'PENDING_MANUAL') {
+          clearInterval(timerRef.current);
+          clearInterval(pollingRef.current);
+          setStage('pending_manual');
         } else if (res.payment_status === 'FAILED') {
           clearInterval(timerRef.current);
           clearInterval(pollingRef.current);
@@ -655,7 +828,7 @@ export default function PaymentProcessingPage() {
       <div
         className="payment-card-responsive"
         style={{
-          maxWidth: (stage === 'initiating' || stage === 'verifying') ? '420px' : '520px',
+          maxWidth: (stage === 'initiating' || stage === 'verifying') ? '420px' : (stage === 'manual_upi' ? '460px' : '520px'),
           width: '100%',
           background: 'rgba(18, 17, 24, 0.95)',
           backdropFilter: 'blur(20px)',
@@ -672,9 +845,8 @@ export default function PaymentProcessingPage() {
         {/* ─────────────────────────────────────────────────────────────
             STAGE 1: INITIATING (Opening payment gateway...)
            ───────────────────────────────────────────────────────────── */}
-        {stage === 'initiating' && (
+        {stage === 'initiating' && provider === 'razorpay' && (
           <div style={{ padding: '0.5rem 0' }}>
-            {/* Title: Text Payment gateway, no logo */}
             <h2
               className="font-display gold-text-glow"
               style={{
@@ -685,16 +857,18 @@ export default function PaymentProcessingPage() {
                 color: 'var(--text-white)',
               }}
             >
-              Payment gateway
+              Razorpay Checkout
             </h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: '0.5rem', marginBottom: '1.5rem' }}>
+              Opening secure payment window...
+            </p>
 
-            {/* Spinner between text and button area */}
             <div
               style={{
                 display: 'flex',
                 justifyContent: 'center',
                 alignItems: 'center',
-                margin: '2.5rem 0',
+                margin: '2rem 0',
               }}
             >
               <Loader2
@@ -705,9 +879,8 @@ export default function PaymentProcessingPage() {
               />
             </div>
 
-            {/* Button: Click here if not redirected */}
             <button
-              onClick={handleManualOpenGateway}
+              onClick={handleLaunchRazorpay}
               className="neu-btn-gold"
               style={{
                 width: '100%',
@@ -717,17 +890,15 @@ export default function PaymentProcessingPage() {
                 borderRadius: '12px',
               }}
             >
-              Click here if not redirected
+              Pay with Razorpay
             </button>
 
-            {/* Order Reference Info */}
             {orderId && (
               <div style={{ marginTop: '1.25rem', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                 Order Ref: <span className="font-mono" style={{ color: 'var(--gold-bright)', fontWeight: '600' }}>{orderId}</span>
               </div>
             )}
 
-            {/* Mock Mode Simulation helper if running in mock sandbox */}
             {isMock && (
               <div style={{ marginTop: '1.25rem', display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
                 <button
@@ -760,6 +931,343 @@ export default function PaymentProcessingPage() {
                 </button>
               </div>
             )}
+          </div>
+        )}
+
+        {stage === 'initiating' && provider !== 'razorpay' && (
+          <div style={{ padding: '0.5rem 0' }}>
+            <h2
+              className="font-display gold-text-glow"
+              style={{
+                fontSize: '1.65rem',
+                fontWeight: '800',
+                letterSpacing: '0.02em',
+                margin: 0,
+                color: 'var(--text-white)',
+              }}
+            >
+              Payment gateway
+            </h2>
+
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                margin: '2.5rem 0',
+              }}
+            >
+              <Loader2
+                size={40}
+                className="animate-spin"
+                color="#D4AF37"
+                style={{ filter: 'drop-shadow(0 0 10px rgba(212, 175, 55, 0.4))' }}
+              />
+            </div>
+
+            <button
+              onClick={handleManualOpenGateway}
+              className="neu-btn-gold"
+              style={{
+                width: '100%',
+                padding: '0.85rem 1.5rem',
+                fontSize: '0.92rem',
+                fontWeight: '700',
+                borderRadius: '12px',
+              }}
+            >
+              Click here if not redirected
+            </button>
+
+            {orderId && (
+              <div style={{ marginTop: '1.25rem', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                Order Ref: <span className="font-mono" style={{ color: 'var(--gold-bright)', fontWeight: '600' }}>{orderId}</span>
+              </div>
+            )}
+
+            {isMock && (
+              <div style={{ marginTop: '1.25rem', display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                <button
+                  onClick={() => handleSimulateMock(true)}
+                  style={{
+                    background: 'rgba(212, 175, 55, 0.1)',
+                    border: '1px solid rgba(212, 175, 55, 0.3)',
+                    color: 'var(--gold-bright)',
+                    padding: '0.35rem 0.75rem',
+                    borderRadius: '8px',
+                    fontSize: '0.75rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Simulate Success
+                </button>
+                <button
+                  onClick={() => handleSimulateMock(false)}
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    color: '#EF4444',
+                    padding: '0.35rem 0.75rem',
+                    borderRadius: '8px',
+                    fontSize: '0.75rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Simulate Failure
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ─────────────────────────────────────────────────────────────
+            STAGE 1B: MANUAL UPI PAYMENT (Direct QR + UTR Input)
+           ───────────────────────────────────────────────────────────── */}
+        {stage === 'manual_upi' && (
+          <div style={{ padding: '0.25rem 0' }}>
+            <div style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '50%',
+              background: 'rgba(212, 175, 55, 0.12)',
+              border: '1.5px solid rgba(212, 175, 55, 0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 1rem',
+              boxShadow: '0 0 25px rgba(212, 175, 55, 0.2)',
+            }}>
+              <QrCode size={28} color="#D4AF37" />
+            </div>
+
+            <h2 className="font-display gold-text-glow" style={{ fontSize: '1.45rem', fontWeight: '800', marginBottom: '0.25rem', color: '#fff' }}>
+              Scan & Pay via UPI
+            </h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginBottom: '1.15rem' }}>
+              Scan the QR code with any UPI app (GPay, PhonePe, Paytm) to complete payment.
+            </p>
+
+            {/* QR Code Container */}
+            <div style={{
+              background: '#0B0A10',
+              border: '1.5px solid rgba(212, 175, 55, 0.4)',
+              borderRadius: '16px',
+              padding: '1.1rem',
+              display: 'inline-flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              marginBottom: '1.25rem',
+              boxShadow: '0 8px 30px rgba(0, 0, 0, 0.6)',
+            }}>
+              <div style={{ background: '#fff', padding: '10px', borderRadius: '10px', display: 'flex', justifyContent: 'center' }}>
+                <QRCodeSVG
+                  value={qrPayload || `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(upiName)}&am=${encodeURIComponent(displayAmount || '0')}&cu=INR&tn=${encodeURIComponent(displayRegCode || orderId)}`}
+                  size={160}
+                  level="H"
+                  includeMargin={false}
+                />
+              </div>
+
+              <div style={{ marginTop: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span className="font-mono" style={{ fontSize: '0.82rem', color: 'var(--gold-bright)', fontWeight: '700' }}>
+                  {upiId}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(upiId);
+                    setCopiedUpi(true);
+                    setTimeout(() => setCopiedUpi(false), 2000);
+                  }}
+                  title="Copy UPI ID"
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    borderRadius: '6px',
+                    padding: '0.2rem 0.4rem',
+                    color: copiedUpi ? '#10b981' : '#fff',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                  }}
+                >
+                  {copiedUpi ? <Check size={13} /> : <Copy size={13} />}
+                </button>
+              </div>
+
+              {displayAmount && (
+                <div style={{ marginTop: '0.4rem', fontSize: '0.88rem', color: '#fff', fontWeight: '800' }}>
+                  Amount to Pay: <span style={{ color: '#10b981' }}>₹{displayAmount}</span>
+                </div>
+              )}
+            </div>
+
+            {/* UTR Submission Form */}
+            <form onSubmit={handleManualUpiSubmit} style={{ textAlign: 'left', marginTop: '0.25rem' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: '700', marginBottom: '0.35rem', letterSpacing: '0.05em' }}>
+                ENTER 12-DIGIT TRANSACTION ID (UTR):
+              </label>
+              <input
+                type="text"
+                maxLength={24}
+                placeholder="e.g. 432198765432"
+                value={utrInput}
+                onChange={(e) => setUtrInput(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '0.75rem 1rem',
+                  borderRadius: '10px',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(212, 175, 55, 0.35)',
+                  color: '#fff',
+                  fontFamily: 'monospace',
+                  fontSize: '0.95rem',
+                  letterSpacing: '0.05em',
+                  marginBottom: '0.6rem',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+              />
+
+              {utrError && (
+                <div style={{ color: '#EF4444', fontSize: '0.78rem', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <AlertTriangle size={14} />
+                  <span>{utrError}</span>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={utrSubmitting}
+                className="neu-btn-gold"
+                style={{
+                  width: '100%',
+                  padding: '0.85rem',
+                  fontSize: '0.92rem',
+                  fontWeight: '700',
+                  borderRadius: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                }}
+              >
+                {utrSubmitting ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
+                <span>{utrSubmitting ? 'Submitting...' : 'Submit Reference ID (UTR)'}</span>
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* ─────────────────────────────────────────────────────────────
+            STAGE 1C: PENDING MANUAL REVIEW
+           ───────────────────────────────────────────────────────────── */}
+        {stage === 'pending_manual' && (
+          <div>
+            <div style={{
+              width: '84px',
+              height: '84px',
+              borderRadius: '50%',
+              background: 'rgba(245, 158, 11, 0.12)',
+              border: '2px solid rgba(245, 158, 11, 0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 1.5rem',
+              boxShadow: '0 0 30px rgba(245, 158, 11, 0.2)',
+            }}>
+              <Clock size={46} color="#f59e0b" />
+            </div>
+
+            <div style={{
+              display: 'inline-block',
+              padding: '0.35rem 0.9rem',
+              borderRadius: '999px',
+              background: 'rgba(245, 158, 11, 0.15)',
+              border: '1px solid rgba(245, 158, 11, 0.35)',
+              color: '#fbbf24',
+              fontSize: '0.75rem',
+              fontWeight: '700',
+              textTransform: 'uppercase',
+              letterSpacing: '0.1em',
+              marginBottom: '0.75rem',
+            }}>
+              Pending Manual Review
+            </div>
+
+            <h2 className="font-display gold-text-glow" style={{ fontSize: '1.5rem', fontWeight: '800', marginBottom: '0.5rem' }}>
+              Reference ID Submitted!
+            </h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.5rem', lineHeight: '1.6' }}>
+              Your transaction reference has been recorded and is currently awaiting manual review by a festival coordinator. Your registration slot is reserved.
+            </p>
+
+            {displayRegCode && (
+              <div style={{
+                background: 'rgba(212, 175, 55, 0.08)',
+                border: '1px dashed rgba(212, 175, 55, 0.4)',
+                borderRadius: '16px',
+                padding: '1.25rem',
+                marginBottom: '1.5rem',
+              }}>
+                <div style={{ fontSize: '0.7rem', color: 'var(--gold-bright)', textTransform: 'uppercase', letterSpacing: '0.15em', fontWeight: '700', marginBottom: '0.35rem' }}>
+                  Registration Code
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
+                  <span className="font-mono" style={{ fontSize: '1.4rem', fontWeight: '800', color: '#fff', letterSpacing: '0.05em' }}>
+                    {displayRegCode}
+                  </span>
+                  <button
+                    onClick={() => copyRegistrationCode(displayRegCode)}
+                    title="Copy Registration Code"
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.08)',
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                      borderRadius: '8px',
+                      padding: '0.4rem',
+                      cursor: 'pointer',
+                      color: copiedCode ? '#10b981' : '#fff',
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                  >
+                    {copiedCode ? <Check size={16} /> : <Copy size={16} />}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <button
+                onClick={() => downloadPassImage(activePassData)}
+                className="neu-btn-gold"
+                style={{
+                  width: '100%',
+                  padding: '0.85rem',
+                  fontSize: '0.9rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                  fontWeight: '700',
+                }}
+              >
+                <Download size={18} />
+                <span>Download Pass (Pending)</span>
+              </button>
+              <button
+                onClick={() => window.location.href = '/'}
+                className="neu-btn-outline"
+                style={{
+                  width: '100%',
+                  padding: '0.85rem',
+                  fontSize: '0.85rem',
+                  borderRadius: '12px',
+                }}
+              >
+                Return to Home
+              </button>
+            </div>
           </div>
         )}
 

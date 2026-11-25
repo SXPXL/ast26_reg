@@ -169,11 +169,51 @@ export const api = {
   },
 
   // Payments Endpoints
-  verifyPayment: async (orderId) => {
+  verifyPayment: async (orderId, extraData = {}) => {
     return apiRequest('/payments/verify', {
       method: 'POST',
-      body: JSON.stringify({ order_id: orderId }),
+      body: JSON.stringify({ order_id: orderId, ...extraData }),
     });
+  },
+  submitManualUpiUtr: async (registrationCode, utr) => {
+    return apiRequest('/payments/manual-upi/submit', {
+      method: 'POST',
+      body: JSON.stringify({ registration_code: registrationCode, utr }),
+    });
+  },
+  reviewManualUpiPayment: async (registrationId, action, rejectionReason = '') => {
+    return apiRequest(`/payments/manual-upi/review/${registrationId}`, {
+      method: 'POST',
+      body: JSON.stringify({ action, rejection_reason: rejectionReason }),
+    });
+  },
+  getPaymentConfig: async () => {
+    return apiRequest('/payments/config');
+  },
+  listManualPayments: async (params = {}) => {
+    const query = new URLSearchParams();
+    if (params.status) query.append('status', params.status);
+    if (params.search) query.append('search', params.search);
+    if (params.limit) query.append('limit', String(params.limit));
+    const qs = query.toString();
+    return apiRequest(`/payments/manual/list${qs ? `?${qs}` : ''}`);
+  },
+  confirmManualPayment: async (registrationId) => {
+    return apiRequest(`/payments/manual/confirm/${registrationId}`, {
+      method: 'POST',
+    });
+  },
+  getVerifyPaymentsWsUrl: () => {
+    const token = localStorage.getItem('athra_token') || localStorage.getItem('token') || '';
+    const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
+    let wsBase;
+    if (base) {
+      wsBase = base.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:') + '/api/v1';
+    } else {
+      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      wsBase = `${proto}//${window.location.host}/api/v1`;
+    }
+    return `${wsBase}/payments/ws/verify-payments${token ? `?token=${encodeURIComponent(token)}` : ''}`;
   },
 
   // Charity Endpoints
@@ -183,10 +223,10 @@ export const api = {
       body: JSON.stringify(donationData),
     });
   },
-  verifyCharityPayment: async (orderId) => {
+  verifyCharityPayment: async (orderId, extraPayload = {}) => {
     return apiRequest('/charity/verify', {
       method: 'POST',
-      body: JSON.stringify({ order_id: orderId }),
+      body: JSON.stringify({ order_id: orderId, ...extraPayload }),
     });
   },
   getCharityDonationByCode: async (code) => {

@@ -136,6 +136,8 @@ export default function EventModal({ event, onClose, onRegistered }) {
     return hasRules ? 'rules' : 'form';
   });
   const [ticketData, setTicketData] = useState(null);
+  const [manualDeskData, setManualDeskData] = useState(null);
+  const [copiedManualCode, setCopiedManualCode] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [errorModal, setErrorModal] = useState(null);
@@ -334,12 +336,29 @@ export default function EventModal({ event, onClose, onRegistered }) {
 
       const result = await api.createRegistration(payload);
 
-      // Handle Cashfree Payment Gateway checkout if payment is pending
-      if (result.payment_status === 'PENDING' && result.payment_session?.payment_session_id) {
-        const sessionId = result.payment_session.payment_session_id;
-        const orderId = result.payment_session.order_id;
-        const envMode = result.payment_session.environment === 'production' ? 'production' : 'sandbox';
+      // Handle Payment Gateway checkout if payment is pending or manual
+      if ((result.payment_status === 'PENDING' || result.payment_status === 'PENDING_MANUAL') && result.payment_session) {
+        const session = result.payment_session;
+        const provider = session.provider || 'razorpay';
+        const orderId = session.order_id || '';
         const fee = event.registration_fee || result.total_amount || 0;
+        const envMode = session.environment === 'production' ? 'production' : 'sandbox';
+
+        // If Manual Pay-at-Desk mode is active, do NOT redirect to online gateway
+        if (provider === 'manual' || session.is_manual_desk) {
+          sessionStorage.removeItem(`event_form_${event.id}`);
+          setManualDeskData({
+            registration_code: result.registration_code,
+            event_title: event.title,
+            venue: event.venue || '',
+            amount: fee,
+            primary_name: formData.primary_name.trim(),
+          });
+          setStep('manual_desk');
+          toastSuccess(`Registered! You can pay at the payment desk on event day.`);
+          if (onRegistered) onRegistered();
+          return;
+        }
 
         // Save registration context and form draft in sessionStorage for retry & status display
         try {
@@ -351,7 +370,10 @@ export default function EventModal({ event, onClose, onRegistered }) {
             amount: fee,
             primary_name: formData.primary_name.trim(),
             formData: formData,
+            provider: provider,
           }));
+
+          sessionStorage.setItem(`payment_session_${orderId}`, JSON.stringify(session));
 
           sessionStorage.setItem(`event_form_${event.id}`, JSON.stringify({
             formData,
@@ -361,8 +383,8 @@ export default function EventModal({ event, onClose, onRegistered }) {
           console.warn('Could not cache session storage:', e);
         }
 
-        // Navigate to dedicated payment opening & processing page with event_id
-        window.location.href = `/payment/process?order_id=${encodeURIComponent(orderId)}&session_id=${encodeURIComponent(sessionId)}&env=${encodeURIComponent(envMode)}&event=${encodeURIComponent(event.title)}&event_id=${encodeURIComponent(event.id)}&amount=${encodeURIComponent(fee)}&venue=${encodeURIComponent(event.venue || '')}`;
+        // Navigate to dedicated payment processing page with provider and order_id
+        window.location.href = `/payment/process?order_id=${encodeURIComponent(orderId)}&provider=${encodeURIComponent(provider)}&key_id=${encodeURIComponent(session.key_id || '')}&session_id=${encodeURIComponent(session.payment_session_id || '')}&env=${encodeURIComponent(envMode)}&event=${encodeURIComponent(event.title)}&event_id=${encodeURIComponent(event.id)}&amount=${encodeURIComponent(fee)}&venue=${encodeURIComponent(event.venue || '')}&code=${encodeURIComponent(result.registration_code)}`;
         return;
       }
 
@@ -1330,6 +1352,131 @@ export default function EventModal({ event, onClose, onRegistered }) {
             </div>
 
             <DigitalTicketPass registration={ticketData} onClose={onClose} />
+          </div>
+        )}
+
+        {/* ======================================================== */}
+        {/* STEP 4B: MANUAL PAY-AT-DESK CONFIRMATION                 */}
+        {/* ======================================================== */}
+        {step === 'manual_desk' && manualDeskData && (
+          <div style={{ textAlign: 'center', padding: '0.5rem 0' }}>
+            <div
+              style={{
+                width: '58px',
+                height: '58px',
+                borderRadius: '50%',
+                background: 'rgba(245, 158, 11, 0.14)',
+                border: '1.5px solid rgba(245, 158, 11, 0.5)',
+                color: '#FBBF24',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 1rem',
+                boxShadow: '0 0 25px rgba(245, 158, 11, 0.22)',
+              }}
+            >
+              <Clock size={30} />
+            </div>
+
+            <h2 className="font-display gold-text-glow" style={{ fontSize: '1.65rem', fontWeight: '800', marginBottom: '0.6rem' }}>
+              You're Registered!
+            </h2>
+
+            <div
+              style={{
+                background: 'rgba(212, 175, 55, 0.1)',
+                border: '1px solid rgba(212, 175, 55, 0.38)',
+                borderRadius: '14px',
+                padding: '1rem 1.25rem',
+                marginBottom: '1.25rem',
+                color: '#FFF',
+                fontSize: '0.98rem',
+                fontWeight: '700',
+                lineHeight: 1.5,
+              }}
+            >
+              You can pay at the payment desk during the event day.
+            </div>
+
+            <div
+              style={{
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px dashed rgba(212, 175, 55, 0.4)',
+                borderRadius: '14px',
+                padding: '1rem',
+                marginBottom: '1.25rem',
+              }}
+            >
+              <div style={{ fontSize: '0.68rem', color: 'var(--gold-bright)', textTransform: 'uppercase', letterSpacing: '0.15em', fontWeight: '700', marginBottom: '0.35rem' }}>
+                Registration Code
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.65rem' }}>
+                <span className="font-mono" style={{ fontSize: '1.35rem', fontWeight: '800', color: '#fff', letterSpacing: '0.05em' }}>
+                  {manualDeskData.registration_code}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(manualDeskData.registration_code);
+                    setCopiedManualCode(true);
+                    setTimeout(() => setCopiedManualCode(false), 2000);
+                  }}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    borderRadius: '8px',
+                    padding: '0.35rem 0.5rem',
+                    color: copiedManualCode ? '#10B981' : '#fff',
+                    cursor: 'pointer',
+                    fontSize: '0.75rem',
+                    fontWeight: '700',
+                  }}
+                >
+                  {copiedManualCode ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+            </div>
+
+            <div
+              style={{
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid rgba(255, 255, 255, 0.07)',
+                borderRadius: '12px',
+                padding: '0.9rem 1rem',
+                textAlign: 'left',
+                fontSize: '0.85rem',
+                marginBottom: '1.25rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.45rem',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Event</span>
+                <span style={{ color: '#fff', fontWeight: '600' }}>{manualDeskData.event_title}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Participant</span>
+                <span style={{ color: '#fff' }}>{manualDeskData.primary_name}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Amount to Pay at Desk</span>
+                <span style={{ color: 'var(--gold-bright)', fontWeight: '800' }}>₹{manualDeskData.amount}</span>
+              </div>
+            </div>
+
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', lineHeight: 1.5, marginBottom: '1.35rem' }}>
+              Once you pay at the payment desk and a volunteer confirms your payment, you will be eligible to participate and your pass will be marked confirmed.
+            </p>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="neu-btn-gold"
+              style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', fontWeight: '700', fontSize: '0.95rem' }}
+            >
+              Done
+            </button>
           </div>
         )}
       </div>

@@ -57,6 +57,25 @@ async def lifespan(app: FastAPI):
                 await conn.execute(text("ALTER TABLE registrations ADD COLUMN IF NOT EXISTS course_and_semester VARCHAR(100);"))
                 await conn.execute(text("ALTER TABLE team_members ADD COLUMN IF NOT EXISTS course_and_semester VARCHAR(100);"))
                 await conn.execute(text("ALTER TABLE team_members ADD COLUMN IF NOT EXISTS department VARCHAR(100);"))
+
+                # Payment gateway provider abstraction migration columns
+                await conn.execute(text("ALTER TABLE registrations ADD COLUMN IF NOT EXISTS payment_provider VARCHAR(50) DEFAULT 'razorpay';"))
+                await conn.execute(text("ALTER TABLE registrations ADD COLUMN IF NOT EXISTS provider_order_id VARCHAR(100);"))
+                await conn.execute(text("ALTER TABLE registrations ADD COLUMN IF NOT EXISTS provider_payment_id VARCHAR(100);"))
+                await conn.execute(text("ALTER TABLE registrations ADD COLUMN IF NOT EXISTS utr VARCHAR(100);"))
+                await conn.execute(text("ALTER TABLE registrations ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP WITH TIME ZONE;"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_registrations_utr ON registrations (utr);"))
+
+                await conn.execute(text("ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS payment_provider VARCHAR(50) DEFAULT 'razorpay';"))
+                await conn.execute(text("ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS provider_order_id VARCHAR(100);"))
+                await conn.execute(text("ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS provider_payment_id VARCHAR(100);"))
+                await conn.execute(text("ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS utr VARCHAR(100);"))
+                await conn.execute(text("ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP WITH TIME ZONE;"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_payment_orders_provider_order_id ON payment_orders (provider_order_id);"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_payment_orders_utr ON payment_orders (utr);"))
+                # Safe backward-compatible backfill for existing rows
+                await conn.execute(text("UPDATE payment_orders SET provider_order_id = cf_order_id WHERE provider_order_id IS NULL AND cf_order_id IS NOT NULL;"))
+                await conn.execute(text("UPDATE payment_orders SET provider_payment_id = cf_payment_id WHERE provider_payment_id IS NULL AND cf_payment_id IS NOT NULL;"))
             except Exception as col_err:
                 logger.info(f"Column check notice: {col_err}")
 

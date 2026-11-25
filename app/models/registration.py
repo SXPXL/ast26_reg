@@ -19,6 +19,7 @@ class PaymentStatus(str, enum.Enum):
     SUCCESS = "SUCCESS"
     FAILED = "FAILED"
     REFUNDED = "REFUNDED"
+    PENDING_MANUAL = "PENDING_MANUAL"
 
 
 class AttendanceStatus(str, enum.Enum):
@@ -55,6 +56,13 @@ class Registration(Base):
     payment_mode = Column(String(30), default="ONLINE", nullable=False)
     payment_status = Column(String(30), default=PaymentStatus.PENDING.value, nullable=False, index=True)
     attendance_status = Column(String(30), default=AttendanceStatus.NOT_ATTENDED.value, nullable=False, index=True)
+
+    # Provider & Transaction Tracking
+    payment_provider = Column(String(50), default="razorpay", nullable=True)
+    provider_order_id = Column(String(100), index=True, nullable=True)
+    provider_payment_id = Column(String(100), nullable=True)
+    utr = Column(String(100), nullable=True, index=True)
+    paid_at = Column(DateTime(timezone=True), nullable=True)
 
     # Attendance details
     attended_at = Column(DateTime(timezone=True), nullable=True)

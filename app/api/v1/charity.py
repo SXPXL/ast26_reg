@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.charity import CharityDonation, CharityPaymentStatus
-from app.services.cashfree_service import cashfree_service
+from app.services.payments import get_payment_provider, NormalizedPaymentStatus
 
 logger = logging.getLogger(__name__)
 
@@ -76,18 +76,25 @@ async def create_charity_donation(
     else:
         return_url = return_url.replace("{order_id}", cf_order_id)
 
+    provider = get_payment_provider()
+    if provider.provider_name == "manual":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Online payments are disabled in manual mode. You can contribute at the payment desk during the event day.",
+        )
     try:
-        cf_response = await cashfree_service.create_order(
+        order_res = await provider.create_order(
             order_id=cf_order_id,
-            order_amount=float(req.amount),
+            amount=float(req.amount),
             customer_id=f"DONOR_{donation_code.replace('-', '')}",
             customer_name=donor_name,
             customer_email=donor_email,
             customer_phone=clean_phone,
+            receipt=donation_code,
             return_url=return_url,
         )
     except Exception as exc:
-        logger.error(f"Failed to create Cashfree order for charity donation: {exc}")
+        logger.error(f"Failed to create order for charity donation: {exc}")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Payment gateway error: {str(exc)}",
@@ -100,9 +107,9 @@ async def create_charity_donation(
         donor_phone=clean_phone,
         amount=req.amount,
         cf_order_id=cf_order_id,
-        cf_payment_session_id=cf_response.get("payment_session_id"),
+        cf_payment_session_id=order_res.checkout_data.get("payment_session_id"),
         payment_status=CharityPaymentStatus.PENDING.value,
-        gateway_response=cf_response,
+        gateway_response=order_res.raw_response,
     )
     db.add(donation)
     await db.commit()
@@ -112,11 +119,11 @@ async def create_charity_donation(
         "success": True,
         "donation_code": donation.donation_code,
         "order_id": cf_order_id,
-        "payment_session_id": cf_response.get("payment_session_id"),
+        "provider": provider.provider_name,
+        "payment_session_id": order_res.checkout_data.get("payment_session_id"),
+        "checkout_data": order_res.checkout_data,
         "amount": float(donation.amount),
         "donor_name": donation.donor_name,
-        "environment": cf_response.get("environment", "sandbox"),
-        "is_mock": cf_response.get("is_mock", False),
     }
 
 
@@ -151,34 +158,13 @@ async def verify_charity_donation(
             "created_at": donation.created_at.isoformat(),
         }
 
-    # Query Cashfree status
+    # Query payment provider for status
     try:
-        cf_status = await cashfree_service.get_order_status(order_id)
-    except Exception as e:
-        logger.error(f"Error querying Cashfree for donation {order_id}: {e}")
-        cf_status = {}
+        provider = get_payment_provider()
+        v_res = await provider.verify_payment(order_id, {})
+        donation.gateway_response = v_res.raw_response
 
-    order_status = str(cf_status.get("order_status", "")).upper()
-    donation.gateway_response = cf_status
-
-    if order_status == "PAID":
-        donation.payment_status = CharityPaymentStatus.SUCCESS.value
-        await db.commit()
-        await db.refresh(donation)
-        return {
-            "success": True,
-            "status": "SUCCESS",
-            "donation_code": donation.donation_code,
-            "donor_name": donation.donor_name,
-            "donor_email": donation.donor_email,
-            "amount": float(donation.amount),
-            "created_at": donation.created_at.isoformat(),
-        }
-
-    # Check transactions list for this order
-    try:
-        payments = await cashfree_service.get_order_payments(order_id)
-        if payments and any(p.get("payment_status", "").upper() == "SUCCESS" for p in payments):
+        if v_res.status == NormalizedPaymentStatus.PAID:
             donation.payment_status = CharityPaymentStatus.SUCCESS.value
             await db.commit()
             await db.refresh(donation)
@@ -191,25 +177,30 @@ async def verify_charity_donation(
                 "amount": float(donation.amount),
                 "created_at": donation.created_at.isoformat(),
             }
-    except Exception:
-        pass
+        elif v_res.status == NormalizedPaymentStatus.FAILED:
+            donation.payment_status = CharityPaymentStatus.FAILED.value
+            await db.commit()
+            return {
+                "success": False,
+                "status": "FAILED",
+                "donation_code": donation.donation_code,
+                "message": v_res.message,
+            }
 
-    if order_status in ["EXPIRED", "TERMINATED", "CANCELLED"]:
-        donation.payment_status = CharityPaymentStatus.FAILED.value
-        await db.commit()
         return {
             "success": False,
-            "status": "FAILED",
+            "status": "PENDING",
             "donation_code": donation.donation_code,
-            "message": f"Payment {order_status.lower()}",
+            "message": v_res.message or "Payment is awaiting confirmation.",
         }
-
-    return {
-        "success": False,
-        "status": "PENDING",
-        "donation_code": donation.donation_code,
-        "message": "Payment is awaiting confirmation.",
-    }
+    except Exception as e:
+        logger.error(f"Error querying payment provider for donation {order_id}: {e}")
+        return {
+            "success": False,
+            "status": donation.payment_status,
+            "donation_code": donation.donation_code,
+            "message": f"Verification error: {str(e)}",
+        }
 
 
 @router.get("/code/{code}")

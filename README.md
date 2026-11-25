@@ -15,9 +15,13 @@ FastAPI-powered registration and event management backend with PostgreSQL, Cashf
    * Set `REQ_AUTH=True` in `.env` to enforce strict JWT Bearer token authentication & role checks.
    * Set `REQ_AUTH=False` for local dev/testing without manual token headers.
 
-3. **Cashfree Payment Gateway Integration**:
-   * Automated order creation with `payment_session_id`.
-   * Real-time payment verification endpoint (`/api/v1/payments/verify`) and webhook receiver (`/api/v1/payments/webhook`).
+3. **Pluggable Payment Gateway Architecture**:
+   * Standardized provider interface (`app/services/payments/`) allowing zero-code switching between gateways via `PAYMENT_PROVIDER` in `.env`:
+     * **`razorpay`** (Default): Razorpay standard checkout with HMAC-SHA256 signature verification and idempotent webhook handling (`payment.captured`, `payment.failed`, `order.paid`).
+     * **`cashfree`**: Cashfree Payment Gateway integration adapter with payment session ID and verification.
+     * **`manual_upi`**: Direct UPI QR / VPA payment with 12-digit UTR submission and admin/volunteer manual review (`PENDING_MANUAL`).
+     * **`manual`**: Pay-at-Desk mode (`PAYMENT_PROVIDER=manual` or `PAYMENT_MODE=manual`). Disables all online gateways; participants register and are instructed to pay at the event payment desk, and volunteers confirm payments live via the **Verify Payments** WebSocket portal.
+   * Never trusts client status alone: registrations transition to `PAID` exclusively via server-side signature verification or verified webhooks.
 
 4. **Multi-member Team Registration**:
    * Min/Max team size validation per event.
@@ -42,10 +46,30 @@ Create or modify `.env` (a default `.env` is already created):
 REQ_AUTH=True
 DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/athra_fest_db
 SECRET_KEY=your_secret_key_here
-CASHFREE_APP_ID=your_cashfree_app_id
-CASHFREE_SECRET_KEY=your_cashfree_secret_key
-CASHFREE_ENVIRONMENT=SANDBOX
+
+# Payment Provider: "razorpay" (default), "cashfree", or "manual_upi"
+PAYMENT_PROVIDER=razorpay
+
+# Razorpay Credentials (required when PAYMENT_PROVIDER=razorpay)
+RAZORPAY_KEY_ID=rzp_test_YOUR_KEY_ID
+RAZORPAY_KEY_SECRET=YOUR_KEY_SECRET
+RAZORPAY_WEBHOOK_SECRET=YOUR_WEBHOOK_SECRET
+
+# Manual UPI Direct Transfer Settings (fallback when PAYMENT_PROVIDER=manual_upi)
+MANUAL_UPI_ID=asthra26@upi
+MANUAL_UPI_NAME=Asthra 26 Mathematics Dept
 ```
+
+### 4. Razorpay Webhook Setup
+In your [Razorpay Dashboard](https://dashboard.razorpay.com/):
+1. Navigate to **Account & Settings** > **Webhooks** > **Add New Webhook**.
+2. **Webhook URL**: `https://<YOUR_BACKEND_URL>/api/v1/payments/webhook`
+3. **Secret**: Enter the exact string set in your `RAZORPAY_WEBHOOK_SECRET` environment variable.
+4. **Active Events**: Check:
+   - `payment.captured`
+   - `payment.failed`
+   - `order.paid`
+5. Save Webhook. Razorpay sends an HMAC-SHA256 signature in the `X-Razorpay-Signature` header, which the backend verifies over the raw request body.
 
 ### 4. Seed Default Admin & Sample Events
 ```bash

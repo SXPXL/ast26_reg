@@ -13,7 +13,10 @@ import {
   RotateCcw,
   AlertCircle,
   EyeOff,
-  Check
+  Check,
+  Phone,
+  MessageCircle,
+  Copy
 } from 'lucide-react';
 import { api } from '../services/api';
 import AsthraLogo from '../components/AsthraLogo';
@@ -327,13 +330,13 @@ export default function CharityDonationPage() {
   }, []);
 
   // Verify order with backend
-  const verifyOrder = async (orderId) => {
+  const verifyOrder = async (orderId, extraPayload = {}) => {
     setStage('verifying');
-    setStatusMessage('Verifying your generous contribution with Cashfree...');
+    setStatusMessage('Verifying your generous contribution...');
     setErrorMessage('');
 
     try {
-      const res = await api.verifyCharityPayment(orderId);
+      const res = await api.verifyCharityPayment(orderId, extraPayload);
       if (res.status === 'SUCCESS' || res.success) {
         setDonationData(res);
         setStage('success');
@@ -344,7 +347,7 @@ export default function CharityDonationPage() {
         // Pending: poll once more after 3 seconds
         setTimeout(async () => {
           try {
-            const retryRes = await api.verifyCharityPayment(orderId);
+            const retryRes = await api.verifyCharityPayment(orderId, extraPayload);
             if (retryRes.status === 'SUCCESS' || retryRes.success) {
               setDonationData(retryRes);
               setStage('success');
@@ -439,6 +442,45 @@ export default function CharityDonationPage() {
       const orderId = result.order_id;
       const envMode = result.environment === 'production' ? 'production' : 'sandbox';
       setPendingOrderId(orderId);
+
+      // Handle Razorpay Checkout
+      if (result.provider === 'razorpay') {
+        if (!window.Razorpay) {
+          throw new Error('Razorpay Payment Gateway SDK not loaded. Please refresh the page.');
+        }
+        const rzp = new window.Razorpay({
+          key: result.key_id || 'rzp_test_placeholder',
+          amount: Math.round(Number(result.order_amount || payload.amount) * 100),
+          currency: result.order_currency || 'INR',
+          name: 'Asthra Care',
+          description: 'Charity Contribution',
+          order_id: result.order_id,
+          prefill: {
+            name: payload.donor_name,
+            email: payload.donor_email,
+            contact: payload.donor_phone,
+          },
+          theme: { color: '#D4AF37' },
+          handler: (response) => {
+            verifyOrder(response.razorpay_order_id || result.order_id, {
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            });
+          },
+          modal: {
+            ondismiss: () => {
+              setStage('input');
+            }
+          }
+        });
+        rzp.on('payment.failed', (failResp) => {
+          setStage('failed');
+          setErrorMessage(failResp.error?.description || 'Contribution payment failed.');
+        });
+        rzp.open();
+        return;
+      }
 
       // Launch Cashfree SDK Checkout
       if (window.Cashfree) {
@@ -575,163 +617,104 @@ export default function CharityDonationPage() {
           >
             Asthra Care Initiative
           </h1>
-
-          <p
-            style={{
-              fontSize: '14px',
-              color: '#9CA3AF',
-              lineHeight: 1.6,
-              maxWidth: '480px',
-              margin: '0 auto',
-            }}
-          >
-            Asthra champions more than just technology — we stand for social impact.
-            Every rupee you contribute directly supports educational resources and welfare for underprivileged students.
-          </p>
         </div>
 
         {/* ─────────────────────────────────────────────────────────────
-            STAGE 1: CONTRIBUTION AMOUNT INPUT & CHIPS
+            STAGE 1: CONTACT HELP WHATSAPP NUMBER FOR CONTRIBUTIONS
         ───────────────────────────────────────────────────────────── */}
-        {stage === 'input' && (
-          <div
-            style={{
-              width: '100%',
-              background: 'rgba(18, 17, 26, 0.85)',
-              border: '1px solid rgba(212, 175, 55, 0.28)',
-              borderRadius: '20px',
-              padding: '28px 24px',
-              boxShadow: '0 12px 40px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(212, 175, 55, 0.2)',
-              backdropFilter: 'blur(20px)',
-              WebkitBackdropFilter: 'blur(20px)',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-              <Heart size={18} color="#D4AF37" fill="rgba(212, 175, 55, 0.2)" />
-              <span style={{ fontSize: '14px', fontWeight: 600, color: '#E5E7EB' }}>
-                Select or Enter Contribution
-              </span>
-            </div>
+        {stage === 'input' && (() => {
+          const rawWhatsapp = import.meta.env.VITE_HELP_WHATSAPP_NUMBER || import.meta.env.VITE_WHATSAPP_NUMBER || '+919876543210';
+          const cleanWaNumber = rawWhatsapp.replace(/[^0-9]/g, '');
+          const cleanTelNumber = rawWhatsapp.replace(/[^0-9+]/g, '');
+          const waMessage = encodeURIComponent('Hi Asthra Team, I would like to contribute to Asthra Care.');
+          const waUrl = `https://wa.me/${cleanWaNumber}?text=${waMessage}`;
 
-            {/* Quick Amount Chips */}
+          return (
             <div
               style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: '10px',
-                marginBottom: '20px',
+                width: '100%',
+                background: 'rgba(18, 17, 26, 0.85)',
+                border: '1px solid rgba(212, 175, 55, 0.28)',
+                borderRadius: '20px',
+                padding: '32px 24px',
+                boxShadow: '0 12px 40px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(212, 175, 55, 0.2)',
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)',
+                textAlign: 'center',
               }}
             >
-              {PRESET_AMOUNTS.map((val) => {
-                const isSelected = amount === val.toString();
-                return (
-                  <button
-                    key={val}
-                    type="button"
-                    onClick={() => handleSelectPreset(val)}
-                    style={{
-                      padding: '10px 0',
-                      borderRadius: '12px',
-                      background: isSelected
-                        ? 'linear-gradient(135deg, rgba(212, 175, 55, 0.25) 0%, rgba(245, 158, 11, 0.15) 100%)'
-                        : 'rgba(255, 255, 255, 0.03)',
-                      border: isSelected
-                        ? '1.5px solid #D4AF37'
-                        : '1px solid rgba(255, 255, 255, 0.08)',
-                      color: isSelected ? '#FBBF24' : '#D1D5DB',
-                      fontSize: '14px',
-                      fontWeight: isSelected ? 700 : 500,
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease',
-                      boxShadow: isSelected ? '0 0 16px rgba(212, 175, 55, 0.2)' : 'none',
-                    }}
-                  >
-                    ₹ {val.toLocaleString('en-IN')}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Custom Amount Input with -> Action Button */}
-            <form onSubmit={handleProceedToDetails}>
               <div
                 style={{
-                  position: 'relative',
+                  width: '56px',
+                  height: '56px',
+                  borderRadius: '50%',
+                  background: 'rgba(212, 175, 55, 0.12)',
+                  border: '1.5px solid rgba(212, 175, 55, 0.45)',
                   display: 'flex',
                   alignItems: 'center',
-                  background: 'rgba(9, 9, 14, 0.95)',
-                  border: amountError ? '1.5px solid #EF4444' : '1.5px solid rgba(212, 175, 55, 0.35)',
-                  borderRadius: '16px',
-                  padding: '6px 8px 6px 18px',
-                  boxShadow: 'inset 0 2px 6px rgba(0, 0, 0, 0.5)',
-                  transition: 'border-color 0.2s ease',
+                  justifyContent: 'center',
+                  margin: '0 auto 16px auto',
+                  boxShadow: '0 0 24px rgba(212, 175, 55, 0.2)',
                 }}
               >
-                <span
-                  style={{
-                    fontSize: '22px',
-                    fontWeight: 700,
-                    color: '#D4AF37',
-                    marginRight: '8px',
-                    userSelect: 'none',
-                  }}
-                >
-                  ₹
+                <Heart size={26} color="#D4AF37" fill="rgba(212, 175, 55, 0.25)" />
+              </div>
+
+              <h3 style={{ fontSize: '20px', fontWeight: 800, color: '#FFFFFF', marginBottom: '8px' }}>
+                Contribute to Asthra Care
+              </h3>
+              <p style={{ fontSize: '14px', color: '#9CA3AF', lineHeight: 1.6, marginBottom: '22px' }}>
+                To make a contribution, please reach out directly to our support team on WhatsApp or call the number below:
+              </p>
+
+              <div
+                style={{
+                  background: 'rgba(212, 175, 55, 0.08)',
+                  border: '1px dashed rgba(212, 175, 55, 0.45)',
+                  borderRadius: '14px',
+                  padding: '14px 18px',
+                  marginBottom: '20px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px',
+                }}
+              >
+                <Phone size={18} color="#D4AF37" />
+                <span className="font-mono" style={{ fontSize: '19px', fontWeight: 800, color: '#F5D77F', letterSpacing: '0.04em' }}>
+                  {rawWhatsapp}
                 </span>
+              </div>
 
-                <input
-                  type="number"
-                  min="1"
-                  step="any"
-                  placeholder="Enter amount"
-                  value={amount}
-                  onChange={(e) => {
-                    setAmount(e.target.value);
-                    if (amountError) setAmountError('');
-                  }}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <a
+                  href={waUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   style={{
-                    flex: 1,
-                    background: 'transparent',
-                    border: 'none',
-                    outline: 'none',
-                    color: '#FFFFFF',
-                    fontSize: '20px',
-                    fontWeight: 700,
-                    fontFamily: 'inherit',
-                  }}
-                />
-
-                <button
-                  type="submit"
-                  aria-label="Proceed with contribution"
-                  style={{
-                    width: '46px',
-                    height: '46px',
-                    borderRadius: '12px',
-                    background: 'linear-gradient(135deg, #D4AF37 0%, #B89628 100%)',
-                    border: 'none',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: '#0B0A10',
-                    cursor: 'pointer',
-                    boxShadow: '0 4px 14px rgba(212, 175, 55, 0.35)',
-                    transition: 'all 0.2s ease',
+                    gap: '8px',
+                    width: '100%',
+                    padding: '13px 20px',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)',
+                    color: '#FFFFFF',
+                    fontWeight: 700,
+                    fontSize: '14px',
+                    textDecoration: 'none',
+                    boxShadow: '0 4px 16px rgba(37, 211, 102, 0.28)',
                   }}
                 >
-                  <ArrowRight size={22} strokeWidth={2.5} />
-                </button>
+                  <MessageCircle size={18} />
+                  <span>Contact on WhatsApp</span>
+                  <ExternalLink size={14} />
+                </a>
               </div>
-
-              {amountError && (
-                <div style={{ color: '#EF4444', fontSize: '13px', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <AlertCircle size={14} />
-                  <span>{amountError}</span>
-                </div>
-              )}
-            </form>
-          </div>
-        )}
+            </div>
+          );
+        })()}
 
         {/* ─────────────────────────────────────────────────────────────
             STAGE 2: PROCESSING / VERIFYING SPINNER

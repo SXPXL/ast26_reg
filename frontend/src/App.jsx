@@ -17,7 +17,7 @@ function MainApp() {
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeSection, setActiveSection] = useState(() => {
-    const validSections = ['status', 'manual_reg', 'participants', 'events', 'stats', 'volunteers', 'settings'];
+    const validSections = ['status', 'manual_reg', 'verify_payments', 'participants', 'events', 'stats', 'volunteers', 'settings'];
     const hash = window.location.hash.replace('#', '');
     if (hash && validSections.includes(hash)) {
       return hash;
@@ -41,7 +41,7 @@ function MainApp() {
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.replace('#', '');
-      const validSections = ['status', 'manual_reg', 'participants', 'events', 'stats', 'volunteers', 'settings'];
+      const validSections = ['status', 'manual_reg', 'verify_payments', 'participants', 'events', 'stats', 'volunteers', 'settings'];
       if (hash && validSections.includes(hash)) {
         setActiveSection(hash);
         localStorage.setItem('asthra_active_section', hash);
