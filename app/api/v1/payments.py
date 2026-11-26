@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload
 from app.core.config import settings
 from app.core.dependencies import require_volunteer_or_admin
 from app.core.security import decode_access_token
-from app.db.session import get_db
+from app.db.session import AsyncSessionLocal, get_db
 from app.models.charity import CharityDonation, CharityPaymentStatus
 from app.models.event import Event
 from app.models.payment import PaymentOrder, PaymentOrderStatus
@@ -552,7 +552,6 @@ async def confirm_manual_desk_payment(
 async def verify_payments_websocket(
     websocket: WebSocket,
     token: Optional[str] = Query(None),
-    db: AsyncSession = Depends(get_db),
 ):
     """
     Live WebSocket feed for the Verify Payments page.
@@ -567,8 +566,10 @@ async def verify_payments_websocket(
             await websocket.close(code=4401)
             return
         user_id = payload.get("sub")
-        user_res = await db.execute(select(User).where(User.id == user_id))
-        user = user_res.scalars().first()
+        # Use a short-lived session for auth so no DB connection is held open during the WebSocket lifetime
+        async with AsyncSessionLocal() as db:
+            user_res = await db.execute(select(User).where(User.id == user_id))
+            user = user_res.scalars().first()
         if not user or not user.is_active or user.role not in [UserRole.ADMIN.value, UserRole.VOLUNTEER.value]:
             await websocket.close(code=4403)
             return
