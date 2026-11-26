@@ -463,7 +463,6 @@ async def list_manual_payments(
     query = (
         select(Registration)
         .options(selectinload(Registration.event))
-        .where(Registration.total_amount > Decimal("0.00"))
     )
 
     sf = (status_filter or "ALL").strip().upper()

@@ -348,30 +348,29 @@ async def create_registration(
     await db.commit()
     await db.refresh(registration)
 
-    # Broadcast newly registered paid-event participants to Verify Payments WebSocket clients
-    if total_amount > Decimal("0.00"):
-        await verify_payments_ws_manager.broadcast(
-            "new_registration",
-            {
-                "id": str(registration.id),
-                "registration_code": registration.registration_code,
-                "primary_name": registration.primary_name,
-                "primary_email": registration.primary_email,
-                "primary_phone": registration.primary_phone,
-                "college_name": registration.college_name,
-                "event_id": str(registration.event_id),
-                "event_title": event.title,
-                "event_type": event.event_type,
-                "total_amount": float(registration.total_amount or 0),
-                "payment_status": registration.payment_status,
-                "payment_provider": registration.payment_provider,
-                "payment_mode": registration.payment_mode,
-                "utr": registration.utr,
-                "team_name": registration.team_name,
-                "created_at": registration.created_at.isoformat() if registration.created_at else None,
-                "paid_at": registration.paid_at.isoformat() if registration.paid_at else None,
-            },
-        )
+    # Broadcast newly registered participants (paid & free) to Verify Payments WebSocket clients
+    await verify_payments_ws_manager.broadcast(
+        "new_registration",
+        {
+            "id": str(registration.id),
+            "registration_code": registration.registration_code,
+            "primary_name": registration.primary_name,
+            "primary_email": registration.primary_email,
+            "primary_phone": registration.primary_phone,
+            "college_name": registration.college_name,
+            "event_id": str(registration.event_id),
+            "event_title": event.title,
+            "event_type": event.event_type,
+            "total_amount": float(registration.total_amount or 0),
+            "payment_status": registration.payment_status,
+            "payment_provider": registration.payment_provider,
+            "payment_mode": registration.payment_mode,
+            "utr": registration.utr,
+            "team_name": registration.team_name,
+            "created_at": registration.created_at.isoformat() if registration.created_at else None,
+            "paid_at": registration.paid_at.isoformat() if registration.paid_at else None,
+        },
+    )
 
     return RegistrationCreatedResponse(
         registration_code=registration.registration_code,

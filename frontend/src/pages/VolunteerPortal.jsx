@@ -2808,7 +2808,7 @@ export default function VolunteerPortal({ activeSection = 'status', onSelectSect
                               {item.event_title}
                             </div>
                             <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>
-                              Fee: <strong style={{ color: '#fff' }}>₹{item.total_amount}</strong>
+                              Fee: <strong style={{ color: '#fff' }}>{Number(item.total_amount) > 0 ? `₹${item.total_amount}` : 'FREE'}</strong>
                               {item.utr ? ` • UTR: ${item.utr}` : ''}
                             </div>
                           </div>
