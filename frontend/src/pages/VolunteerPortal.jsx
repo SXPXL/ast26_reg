@@ -2752,6 +2752,7 @@ return (
                   minWidth="215px"
                   options={[
                     { value: 'PENDING_FIRST', label: 'Pending First', shortLabel: 'Pending First', icon: Clock, color: '#F59E0B' },
+                    { value: 'RECENT', label: 'Recent Registrations', shortLabel: 'Recent First', icon: Sparkles, color: 'var(--gold-bright)' },
                     { value: 'PENDING', label: 'Pending Only', shortLabel: 'Pending Only', icon: AlertCircle, color: '#F59E0B' },
                     { value: 'CONFIRMED', label: 'Confirmed Only', shortLabel: 'Confirmed Only', icon: CheckCircle2, color: '#10B981' },
                   ]}
