@@ -1290,9 +1290,11 @@ export default function EventModal({ event, onClose, onRegistered }) {
               >
                 <div>
                   <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Registration Fee (Per Event)</div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                    {fee > 0 ? 'Cashfree Gateway Payment' : 'Complimentary Free Access'}
-                  </div>
+                  {fee <= 0 && (
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                      Complimentary Free Access
+                    </div>
+                  )}
                 </div>
                 <div className="font-mono" style={{ fontSize: '1.4rem', fontWeight: '800', color: 'var(--gold-bright)' }}>
                   {fee > 0 ? `₹${fee.toFixed(0)}` : 'FREE'}

@@ -30,8 +30,8 @@ class EventBase(BaseModel):
                 self.min_team_size = 1
                 self.max_team_size = 1
         elif self.event_type == EventType.TEAM:
-            if self.min_team_size < 2:
-                raise ValueError("Team event min_team_size must be at least 2.")
+            if self.min_team_size < 1:
+                raise ValueError("Team event min_team_size must be at least 1.")
             if self.max_team_size < self.min_team_size:
                 raise ValueError("max_team_size must be greater than or equal to min_team_size.")
         return self
